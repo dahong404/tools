@@ -17,10 +17,10 @@ import re
 
 version = "AutoConfig v2.0"
 # 结点设置
-minNodes = 400  # 从结点池中获取的结点数小于N就累加到大于N为止
-acceptNodes = 400  # ping的结点个数
+minNodes = 700  # 从结点池中获取的结点数小于N就累加到大于N为止
+groupNodes = 32  # 一个线程ping32个结点
 useRandom = True  # 结点池的访问次序是否随机
-minDelay = 0  # 丢弃时延小于N ms的结点，有时候过小时延的结点不好用
+minDelay = 20  # 丢弃时延小于N ms的结点，有时候过小时延的结点不好用
 
 useCache = False  # 开启后，节点会保存cacheTime秒供下次使用
 cacheTime = 14400
@@ -30,11 +30,11 @@ exclude = re.compile('HK|TW|US')
 
 # 测速设置
 maxTime = 8  # 测速时间：N 秒
-minSpeed = 50  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
+minSpeed = 40  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
 testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换，两端的单双引号不能改
 
 basePort = 20000  # 多线程测速起始端口
-maxProcess = 24  # 同时运行的测速线程数[仅模式2会使用多线程测速]
+maxProcess = 16  # 同时运行的测速线程数[仅模式2会使用多线程测速]
 limitNodes = 5  # 测到N个可用结点后自动结束测速
 
 debug = False  # 查看各代理线程工作状态用
@@ -42,12 +42,15 @@ daemonProxy = True  # 开启后，每隔daemonTime秒检查代理状态，若断
 daemonTime = 300
 
 Aurls = [  # 优质结点池
+    "https://fq.lonxin.net/vmess/sub",
+    "https://free.dswang.ga/vmess/sub",
     "https://proxies.bihai.cf/vmess/sub",
     "https://free.kingfu.cf/vmess/sub",
     "https://sspool.herokuapp.com/vmess/sub",
     "https://proxypool.remon602.ga/vmess/sub",
     "https://ednovas.design/vmess/sub",
     "https://proxy.51798.xyz/vmess/sub",
+
 ]
 
 urls = [  # 普通结点池
@@ -59,10 +62,8 @@ urls = [  # 普通结点池
     # "https://raw.githubusercontent.com/adiwzx/freenode/main/adispeed.txt"
     "https://etproxypool.ga/vmess/sub",
     "https://dlj.li/oq112r",
-    "https://free.dswang.ga/vmess/sub",
     "http://8.135.91.61/vmess/sub",
     "https://www.linbaoz.com/vmess/sub",
-    "https://fq.lonxin.net/vmess/sub",
     "https://hello.stgod.com/vmess/sub",
     "https://proxypool.fly.dev/vmess/sub",
     "https://free.zdl.im/vmess/sub",
@@ -104,8 +105,8 @@ def log(str, showTime=True):
 
 
 class Node:
-    def __init__(self, delay, config,src=""):
-        self.src=src
+    def __init__(self, delay, config, src=""):
+        self.src = src
         self.delay = delay  # int
         self.config = config  # 字典
         self.speed = None
@@ -143,33 +144,34 @@ def testSpeed(i, port=1080, maxTime=maxTime):
     return res
 
 
-def pingNodes(configs):  # 入：字符串数组
-    if len(configs) > acceptNodes:
-        configs = configs[:acceptNodes]
-    log("pinging " + str(len(configs)) + " nodes... ")
-    start = time.time()
-    random.shuffle(configs)
-    left = 0
-    gap = len(configs) // 32 + 1  # 把所有结点均分成32组
-    threads = []
-    for i in range(0, 32):  # 开32个线程，每线程ping一组
-        try:
-            t = threading.Thread(target=doTCPing, args=(configs[left:left + gap],))
-            left += gap
-            threads.append(t)
-        except Exception as e:
-            break
-    for i in threads:
-        i.setDaemon(True)
-        i.start()
-        # time.sleep(0.1)
-    for i in threads:
-        try:
-            i.join()  # 等待全部ping结束
-        except Exception:
-            pass
-    ave = len(configs) / (time.time() - start)
-    log("speed: " + ("%.2f" % ave) + " pics/s")
+#
+# def pingNodes(configs):  # 入：字符串数组
+#     if len(configs) > acceptNodes:
+#         configs = configs[:acceptNodes]
+#     log("pinging " + str(len(configs)) + " nodes... ")
+#     start = time.time()
+#     random.shuffle(configs)
+#     left = 0
+#     gap = len(configs) // 32 + 1  # 把所有结点均分成32组
+#     threads = []
+#     for i in range(0, 32):  # 开32个线程，每线程ping一组
+#         try:
+#             t = threading.Thread(target=doTCPing, args=(configs[left:left + gap],))
+#             left += gap
+#             threads.append(t)
+#         except Exception as e:
+#             break
+#     for i in threads:
+#         i.setDaemon(True)
+#         i.start()
+#         # time.sleep(0.1)
+#     for i in threads:
+#         try:
+#             i.join()  # 等待全部ping结束
+#         except Exception:
+#             pass
+#     ave = len(configs) / (time.time() - start)
+#     log("speed: " + ("%.2f" % ave) + " pics/s")
 
 
 # def doPing(Nconfigs):  # 入：字典数组
@@ -196,21 +198,43 @@ def pingNodes(configs):  # 入：字符串数组
 def doTCPing(Nconfigs):
     global avalist
     # log("len: " + str(len(Nconfigs)))
+    basecommand = ""
+    jsonconfig = []
     for config in Nconfigs:
-        res = 'res'
         try:
-            cfg = json.loads(config)  # 字典
+            cfg = json.loads(config)
+            jsonconfig.append(cfg)
             addr = cfg["add"]
             port = str(cfg["port"])
-            f = os.popen("tcping -n 2 -w 1 -p " + port + " " + addr)
-            res = f.read()
-        except Exception:
+            basecommand += "tcping -n 1 -w 0.4 -p " + port + " " + addr + " & echo hello & "
+        except Exception as e:
+            # print(e)
             continue
-        if res.find("Average") != -1:  # 通
-            temp = res.split("=")
+    res = os.popen(basecommand).read().split("hello")
+
+    for index, part in enumerate(res):
+        if part.find("Average") != -1:  # 通
+            temp = part.split("=")
             delay = temp[len(temp) - 1]
             ddelay = int(delay[:-7])  # str->float，倒数第三个要
-            avalist.append(Node(ddelay, cfg))
+            avalist.append(Node(ddelay, jsonconfig[index]))
+
+    # for config in Nconfigs:
+    #     res = 'res'
+    #     try:
+    #         cfg = json.loads(config)  # 字典
+    #         addr = cfg["add"]
+    #         port = str(cfg["port"])
+    #         command = "tcping -n 1 -w 0.4 -p " + port + " " + addr + " & echo hello & "
+    #         # f = os.popen("tcping -n 1 -w 0.4 -p " + port + " " + addr)
+    #         res = f.read()
+    #     except Exception:
+    #         continue
+    #     if res.find("Average") != -1:  # 通
+    #         temp = res.split("=")
+    #         delay = temp[len(temp) - 1]
+    #         ddelay = int(delay[:-7])  # str->float，倒数第三个要
+    #         avalist.append(Node(ddelay, cfg))
 
 
 def getconfigsFromURL():  # 回：字符串数组
@@ -255,11 +279,12 @@ def getconfigsFromURL():  # 回：字符串数组
 
 
 def detectBaidu(port):
-    baidu = os.popen(curlPath + " -x http://localhost:" + str(port) + " -skLI www.baidu.com -m 8").read(40)
-    if str(baidu).find("200 OK") != -1:
-        return True, baidu
+    f = os.popen("tcping -s -w -p " + str(port) + " localhost")
+    res = f.read()
+    if res.find("Average") != -1:  # 通
+        return True, None
     else:
-        return False, baidu
+        return False, None
 
 
 # -L 重定向 -A "header" -I只要头 -s静默模式 -m超时秒数
@@ -267,7 +292,7 @@ def detectConn(port=1080):
     failCount = 0
     time.sleep(random.randint(1, 4) + random.randint(0, 5) * 0.1)
     while not detectBaidu(port)[0]:  # 等待v2ray启动
-        time.sleep(2)
+        time.sleep(1)
         failCount += 1
         if failCount > 3:
             log("error: cannot start proxy in port " + str(port))
@@ -636,6 +661,12 @@ def getTimeGap():
     try:
         pretime = content["current"]["time"]
     except:
+        now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        content["current"] = {}
+        content["current"]["time"] = now
+        log("running in first time, create cache")
+        with open(path, "w") as file:
+            file.write(json.dumps(content))
         return 99999
     pre = int(time.mktime(time.strptime(pretime, "%Y-%m-%d %H:%M:%S")))
     now = time.time()
@@ -787,10 +818,12 @@ def guiMode(nodes):
 
 rawNodes = []
 
+count = 0
+
 
 def retrieveFromUrl(url):
     # log("parameter: " + str(url))
-    global rawNodes
+    global rawNodes, count
     available = False
     for i in range(0, 2):  # 两次机会
         try:
@@ -815,7 +848,8 @@ def retrieveFromUrl(url):
                 rawNodes.append(content)
             except Exception as e:
                 pass
-        log(url[0] + ": " + str(len(vmess)) + ", total: " + str(len(rawNodes)))
+        count += len(vmess)
+        log(url[0] + ": " + str(len(vmess)) + ", total: " + str(count))
         # log("after " + url[0] + ": " + str(len(rawNodes)))
         lock.release()
     else:
@@ -824,25 +858,49 @@ def retrieveFromUrl(url):
 
 def retrieveNodes():
     log("retrieving nodes ... ")
-    global urls, rawNodes
+    global urls, rawNodes, count
     executes = ThreadPoolExecutor(max_workers=4)
     running = []
     for i in urls:
         r = executes.submit(retrieveFromUrl, (i,))
         running.append(r)
     out = 0
-    while len(rawNodes) < minNodes:
+    runping = []
+    while count < minNodes:
         out += 1
-        time.sleep(1)
-        if out > 30:
+        time.sleep(0.5)
+        if len(rawNodes) >= groupNodes:
+            # random.shuffle(rawNodes)
+            log("start pinging")
+            temp = rawNodes[:groupNodes]
+            rawNodes = rawNodes[groupNodes:]
+            q = threading.Thread(target=doTCPing, args=(temp,))
+            q.setDaemon(True)
+            runping.append(q)
+            q.start()
+        if out > 60:
+            # log("break appending ping")
             break
     for i in running:
         i.cancel()
     if len(rawNodes) < 10:
         log("error: cannot retrieve nodes, update pool please")
         exit(-1)
-    log("total nodes: " + str(len(rawNodes)))
-
+    while len(rawNodes) != 0:
+        # log("start after ping ," + str(len(rawNodes)))
+        temp = rawNodes[:groupNodes]
+        rawNodes = rawNodes[groupNodes:]
+        q = threading.Thread(target=doTCPing, args=(temp,))
+        q.setDaemon(True)
+        runping.append(q)
+        q.start()
+        # time.sleep(1)
+    for i in runping:
+        try:
+            i.join()
+        except:
+            pass
+    log("total nodes: " + str(count))
     return rawNodes
 
 
@@ -865,13 +923,13 @@ if __name__ == '__main__':
             log("set min delay = " + mode.split(" ")[1])
     mode = mode.split(" ")[0]
     killV2ray()
-    if getTimeGap() < cacheTime and useCache:
+    if useCache and getTimeGap() < cacheTime:
         log("using cache")
         nodes = readNodes()
     else:
         log("passing cache")
         # pingNodes(getconfigsFromURL())
-        pingNodes(retrieveNodes())
+        retrieveNodes()
         log("Pingable nodes: " + str(len(avalist)))
         nodes = customizeNode(avalist)
         saveNode(nodes)
