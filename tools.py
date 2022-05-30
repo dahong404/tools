@@ -1,4 +1,8 @@
+from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
+import warnings
+
+warnings.filterwarnings("ignore")
 import subprocess
 from collections import OrderedDict
 import random
@@ -15,45 +19,55 @@ import re
 # https://androidrepo.com/repo/Leon406-Sub
 # https://i.sqeven.me/q
 
-version = "AutoConfig v2.0"
+version = "AutoConfig v2.1"
 # 结点设置
-minNodes = 700  # 从结点池中获取的结点数小于N就累加到大于N为止
-groupNodes = 32  # 一个线程ping32个结点
+minNodes = 200  # 从结点池中获取的结点数小于N就累加到大于N为止
+acceptNodes = 500  # ping的结点个数
 useRandom = True  # 结点池的访问次序是否随机
-minDelay = 20  # 丢弃时延小于N ms的结点，有时候过小时延的结点不好用
-
+minDelay = 0  # 丢弃时延小于N ms的结点，过小时延的结点大概率不通
+passPing = False  # 跳过ping
 useCache = False  # 开启后，节点会保存cacheTime秒供下次使用
 cacheTime = 14400
-
+# protocol = "vmess"
 useExclude = False  # 开启后会排除下列地区的结点
 exclude = re.compile('HK|TW|US')
 
 # 测速设置
 maxTime = 8  # 测速时间：N 秒
-minSpeed = 40  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
+minSpeed = 50  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
 testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换，两端的单双引号不能改
 
 basePort = 20000  # 多线程测速起始端口
-maxProcess = 16  # 同时运行的测速线程数[仅模式2会使用多线程测速]
-limitNodes = 5  # 测到N个可用结点后自动结束测速
+maxProcess = 24  # 同时运行的测速线程数[仅模式2会使用多线程测速]
+limitNodes = 10  # 测到N个可用结点后自动结束测速
 
 debug = False  # 查看各代理线程工作状态用
 daemonProxy = True  # 开启后，每隔daemonTime秒检查代理状态，若断开则尝试自动重新配置
 daemonTime = 300
 
-Aurls = [  # 优质结点池
-    "https://fq.lonxin.net/vmess/sub",
-    "https://free.dswang.ga/vmess/sub",
+useRemote = True  # 从远程获取结点，加快获取结点的速度
+remoteSocket = ("192.168.123.1", 22)
+try:
+    import paramiko
+except:
+    useRemote = False
+
+ss = [  # ss结点池，仅接受明文
+
+    "https://proxies.bihai.cf/ss/sub",
+    "https://proxypool.remon602.ga/ss/sub"
+]
+
+Avmess = [  # vmess优质结点池，仅接受b64
     "https://proxies.bihai.cf/vmess/sub",
     "https://free.kingfu.cf/vmess/sub",
     "https://sspool.herokuapp.com/vmess/sub",
     "https://proxypool.remon602.ga/vmess/sub",
     "https://ednovas.design/vmess/sub",
-    "https://proxy.51798.xyz/vmess/sub",
-
 ]
 
-urls = [  # 普通结点池
+vmess = [  # vmess普通结点池，仅接受b64
+    "https://proxy.51798.xyz/vmess/sub",
     "https://v2ray.banyunxiaoxi.ml/",
     "https://jiang.netlify.app/",
     "https://youlianboshi.netlify.com/",
@@ -62,20 +76,21 @@ urls = [  # 普通结点池
     # "https://raw.githubusercontent.com/adiwzx/freenode/main/adispeed.txt"
     "https://etproxypool.ga/vmess/sub",
     "https://dlj.li/oq112r",
+    "https://free.dswang.ga/vmess/sub",
     "http://8.135.91.61/vmess/sub",
     "https://www.linbaoz.com/vmess/sub",
+    "https://fq.lonxin.net/vmess/sub",
     "https://hello.stgod.com/vmess/sub",
     "https://proxypool.fly.dev/vmess/sub",
     "https://free.zdl.im/vmess/sub",
     "https://ss.dswang.ga:8443/vmess/sub"
-
 ]
 
 if useRandom:
-    random.shuffle(urls)
+    random.shuffle(vmess)
 
-for i in Aurls:
-    urls.insert(0, i)
+for i in Avmess:
+    vmess.insert(0, i)
 
 # 失效或暂时失效
 # "https://emby.luoml.eu.org/vmess/sub",
@@ -105,8 +120,7 @@ def log(str, showTime=True):
 
 
 class Node:
-    def __init__(self, delay, config, src=""):
-        self.src = src
+    def __init__(self, delay, config):
         self.delay = delay  # int
         self.config = config  # 字典
         self.speed = None
@@ -133,45 +147,48 @@ def testSpeed(i, port=1080, maxTime=maxTime):
             for i in range(0, 5):
                 accessTime = os.popen('curl -x http://localhost:' + str(
                     port) + ' -o /dev/null -skL www.google.com -m 3 -w "%{time_total}"').read()
+                time.sleep(0.1)
                 daccessTime = float(accessTime[:-4])
                 if daccessTime < 1.0:
                     count += 1
             if count >= 2:
-                res = 500
+                res = 100
     except Exception as e:
 
         return -1
     return res
 
 
-#
-# def pingNodes(configs):  # 入：字符串数组
-#     if len(configs) > acceptNodes:
-#         configs = configs[:acceptNodes]
-#     log("pinging " + str(len(configs)) + " nodes... ")
-#     start = time.time()
-#     random.shuffle(configs)
-#     left = 0
-#     gap = len(configs) // 32 + 1  # 把所有结点均分成32组
-#     threads = []
-#     for i in range(0, 32):  # 开32个线程，每线程ping一组
-#         try:
-#             t = threading.Thread(target=doTCPing, args=(configs[left:left + gap],))
-#             left += gap
-#             threads.append(t)
-#         except Exception as e:
-#             break
-#     for i in threads:
-#         i.setDaemon(True)
-#         i.start()
-#         # time.sleep(0.1)
-#     for i in threads:
-#         try:
-#             i.join()  # 等待全部ping结束
-#         except Exception:
-#             pass
-#     ave = len(configs) / (time.time() - start)
-#     log("speed: " + ("%.2f" % ave) + " pics/s")
+def pingNodes(configs):  # 入：字符串数组
+    if len(configs) > acceptNodes:
+        random.shuffle(configs)
+        configs = configs[:acceptNodes]
+
+    log("pinging " + str(len(configs)) + " nodes... ")
+    start = time.time()
+
+    left = 0
+    gap = len(configs) // 32 + 1  # 把所有结点均分成32组
+    threads = []
+    for i in range(0, 32):  # 开32个线程，每线程ping一组
+        try:
+            t = threading.Thread(target=doTCPing, args=(configs[left:left + gap],))
+            left += gap
+            threads.append(t)
+        except Exception as e:
+            break
+    for i in threads:
+        i.setDaemon(True)
+        i.start()
+        # time.sleep(0.1)
+    for i in threads:
+        try:
+            i.join()  # 等待全部ping结束
+        except Exception:
+            pass
+    ave = len(configs) / (time.time() - start)
+
+    log("speed: " + ("%.2f" % ave) + " pics/s")
 
 
 # def doPing(Nconfigs):  # 入：字典数组
@@ -194,52 +211,40 @@ def testSpeed(i, port=1080, maxTime=maxTime):
 #             ddelay = int(delay[:-3])  # str->int
 #             avalist.append(Node(ddelay, cfg))
 
+info = ""
+
 
 def doTCPing(Nconfigs):
-    global avalist
+    global avalist, info
     # log("len: " + str(len(Nconfigs)))
-    basecommand = ""
-    jsonconfig = []
-    for config in Nconfigs:
-        try:
-            cfg = json.loads(config)
-            jsonconfig.append(cfg)
-            addr = cfg["add"]
-            port = str(cfg["port"])
-            basecommand += "tcping -n 1 -w 0.4 -p " + port + " " + addr + " & echo hello & "
-        except Exception as e:
-            # print(e)
-            continue
-    res = os.popen(basecommand).read().split("hello")
-
-    for index, part in enumerate(res):
-        if part.find("Average") != -1:  # 通
-            temp = part.split("=")
-            delay = temp[len(temp) - 1]
-            ddelay = int(delay[:-7])  # str->float，倒数第三个要
-            avalist.append(Node(ddelay, jsonconfig[index]))
-
-    # for config in Nconfigs:
-    #     res = 'res'
-    #     try:
-    #         cfg = json.loads(config)  # 字典
-    #         addr = cfg["add"]
-    #         port = str(cfg["port"])
-    #         command = "tcping -n 1 -w 0.4 -p " + port + " " + addr + " & echo hello & "
-    #         # f = os.popen("tcping -n 1 -w 0.4 -p " + port + " " + addr)
-    #         res = f.read()
-    #     except Exception:
-    #         continue
-    #     if res.find("Average") != -1:  # 通
-    #         temp = res.split("=")
-    #         delay = temp[len(temp) - 1]
-    #         ddelay = int(delay[:-7])  # str->float，倒数第三个要
-    #         avalist.append(Node(ddelay, cfg))
+    if not passPing:
+        for config in Nconfigs:
+            res = 'res'
+            try:
+                cfg = json.loads(config)  # 字典
+                addr = cfg["add"]
+                port = str(cfg["port"])
+                f = os.popen("tcping -n 1 -w 1 -p " + port + " " + addr)
+                res = f.read()
+            except Exception:
+                continue
+            if res.find("Average") != -1:  # 通
+                temp = res.split("=")
+                delay = temp[len(temp) - 1]
+                ddelay = int(delay[:-7])  # str->float，倒数第三个要
+                avalist.append(Node(ddelay, cfg))
+    else:
+        for config in Nconfigs:
+            try:
+                cfg = json.loads(config)  # 字典
+            except Exception as e:
+                continue
+            avalist.append(Node(100, cfg))
 
 
 def getconfigsFromURL():  # 回：字符串数组
     configs = []
-    for url in urls:
+    for url in vmess:
         available = False
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE'}
@@ -279,20 +284,19 @@ def getconfigsFromURL():  # 回：字符串数组
 
 
 def detectBaidu(port):
-    f = os.popen("tcping -s -w -p " + str(port) + " localhost")
-    res = f.read()
-    if res.find("Average") != -1:  # 通
-        return True, None
+    baidu = os.popen("tcping -n 2 -w 1 -p " + str(port) + " localhost").read()
+    if baidu.find("Average") != -1:
+        return True
     else:
-        return False, None
+        return False
 
 
 # -L 重定向 -A "header" -I只要头 -s静默模式 -m超时秒数
 def detectConn(port=1080):
     failCount = 0
     time.sleep(random.randint(1, 4) + random.randint(0, 5) * 0.1)
-    while not detectBaidu(port)[0]:  # 等待v2ray启动
-        time.sleep(1)
+    while not detectBaidu(port):  # 等待v2ray启动
+        time.sleep(2)
         failCount += 1
         if failCount > 3:
             log("error: cannot start proxy in port " + str(port))
@@ -346,107 +350,96 @@ def writeConfig(newcfg: dict, rpath=path):
         file.write(json.dumps(newcfg))
 
 
-basecfg = None
-
-
 def genConfig(e: Node, port=1080):  # 生成配置
-    global basecfg
-    if basecfg is None:
-        lock.acquire()
-        if basecfg is None:  # 双重检查避免错误
-            with open(path, "r") as file:
-                basecfg = json.loads(file.read(), object_pairs_hook=OrderedDict)
-        lock.release()
+    try:
+        with open(path, "r") as file:
+            basecfg = json.loads(file.read(), object_pairs_hook=OrderedDict)
 
-    proxy = basecfg["outbounds"][0]  # 代理服务器配置
+        proxy = basecfg["outbounds"][0]  # 代理服务器配置
 
-    if port == 1080:
-        basecfg["inbounds"] = [{
-            "protocol": "socks",
-            "listen": "0.0.0.0",
-            "port": 1079
-        }, {
-            "protocol": "http",
-            "listen": "0.0.0.0",
-            "port": 1080
-        }]
-    else:
-        basecfg["inbounds"] = [
-            {
+        if port == 1080:
+            basecfg["inbounds"] = [{
+                "protocol": "socks",
+                "listen": "0.0.0.0",
+                "port": 1079
+            }, {
                 "protocol": "http",
                 "listen": "0.0.0.0",
-                "port": port
+                "port": 1080
+            }]
+        else:
+            basecfg["inbounds"] = [
+                {
+                    "protocol": "http",
+                    "listen": "0.0.0.0",
+                    "port": port
+                }
+            ]
+
+        basecfg["current"]["delay"] = str(e.delay)  # debug用附加信息
+        basecfg["current"]["config"] = e.config
+        basecfg["current"]["speed"] = e.speed
+        basecfg["current"]["location"] = e.location
+        basecfg["current"]["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+        proxySetting = {
+            "vnext": [
+                {
+                    "address": e.config["add"],
+                    "port": int(e.config["port"]),
+                    "users": [
+                        {
+                            "id": e.config["id"],
+                            "alterId": int(e.config["aid"]),
+                            "email": "t@t.tt",
+                            "security": "auto"
+                        }
+                    ]
+                }
+            ],
+            "servers": None,
+            "response": None
+        }
+        streamSettings = {
+            "network": e.config["net"],
+            "security": e.config["tls"],
+            "tlsSettings": {
+                "allowInsecure": True,
+                "serverName": e.config["host"]
+            },
+            "tcpSettings": None,
+            "kcpSettings": None,
+            "wsSettings": None,
+            "httpSettings": None,
+            "quicSettings": None
+        }
+        protocolSetting = {
+            "connectionReuse": True,
+            "path": e.config["path"],
+            "headers": {
+                "Host": e.config["host"]
             }
-        ]
-    try:
-        host = e.config["host"]
-    except KeyError:
-        log("port " + str(port) + ": key error in genconfig")
+        }
+
+        if e.config["tls"] == "":  # 安全配置
+            streamSettings["security"] = None
+        else:
+            streamSettings["security"] = "tls"
+            streamSettings["tlsSettings"] = {
+                "allowInsecure": True,
+                "serverName": e.config["host"]
+            }
+        if e.config["net"] == "tcp":  # 协议配置
+            streamSettings["tcpSettings"] = protocolSetting
+            streamSettings["wsSettings"] = None
+        elif e.config["net"] == "ws":
+            streamSettings["wsSettings"] = protocolSetting
+            streamSettings["tcpSettings"] = None
+        proxy["settings"] = proxySetting
+        proxy["streamSettings"] = streamSettings
+        basecfg["outbounds"][0] = proxy
+    except Exception as e:
         return basecfg
-
-    # basecfg["current"]["delay"] = str(e.delay)  # debug用附加信息
-    # basecfg["current"]["config"] = e.config
-    # basecfg["current"]["speed"] = e.speed
-    # basecfg["current"]["location"] = e.location
-    # basecfg["current"]["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
-    proxySetting = {
-        "vnext": [
-            {
-                "address": e.config["add"],
-                "port": int(e.config["port"]),
-                "users": [
-                    {
-                        "id": e.config["id"],
-                        "alterId": int(e.config["aid"]),
-                        "email": "t@t.tt",
-                        "security": "auto"
-                    }
-                ]
-            }
-        ],
-        "servers": None,
-        "response": None
-    }
-    streamSettings = {
-        "network": e.config["net"],
-        "security": e.config["tls"],
-        "tlsSettings": {
-            "allowInsecure": True,
-            "serverName": e.config["host"]
-        },
-        "tcpSettings": None,
-        "kcpSettings": None,
-        "wsSettings": None,
-        "httpSettings": None,
-        "quicSettings": None
-    }
-    protocolSetting = {
-        "connectionReuse": True,
-        "path": e.config["path"],
-        "headers": {
-            "Host": e.config["host"]
-        }
-    }
-
-    if e.config["tls"] == "":  # 安全配置
-        streamSettings["security"] = None
-    else:
-        streamSettings["security"] = "tls"
-        streamSettings["tlsSettings"] = {
-            "allowInsecure": True,
-            "serverName": e.config["host"]
-        }
-    if e.config["net"] == "tcp":  # 协议配置
-        streamSettings["tcpSettings"] = protocolSetting
-        streamSettings["wsSettings"] = None
-    elif e.config["net"] == "ws":
-        streamSettings["wsSettings"] = protocolSetting
-        streamSettings["tcpSettings"] = None
-    proxy["settings"] = proxySetting
-    proxy["streamSettings"] = streamSettings
-    basecfg["outbounds"][0] = proxy
-
     return basecfg
 
 
@@ -491,7 +484,7 @@ def mulitTest(nodes):
         while running >= maxProcess:
             log("main: sleep, running process max to " + str(maxProcess))
             time.sleep(3)
-            if unavailableCount > 24:
+            if unavailableCount > maxProcess:
                 log("too many unavailable nodes detected, try another mode please")
                 exit(-1)
         else:
@@ -510,7 +503,8 @@ def mulitTest(nodes):
         time.sleep(0.5)
     chooseBtn["state"] = tkinter.ACTIVE
     keeponBtn["state"] = tkinter.ACTIVE
-    label["text"] = "请选择"
+    if label["text"] != "测试中":
+        label["text"] = "请选择"
     while running > 0:
         log(">>>>INFO>>>>: waiting running process done, now: " + str(running))
         time.sleep(5)
@@ -551,7 +545,8 @@ def mulitTest(nodes):
                     time.sleep(5)
                 log("finish ")
                 keeponBtn["state"] = tkinter.ACTIVE
-                label["text"] = "请选择"
+                if label["text"] == "测试中":
+                    label["text"] = "请选择"
                 i += 32
                 keepon = False
     except Exception as e:
@@ -571,6 +566,15 @@ def singleSpeedTest(port, process, e: Node, index):
         log("★★★INFO★★★: node " + str(index) + " on port " + str(port) + ": Unavailable")
         unavailableCount += 1
     else:
+        if passPing:
+            res = os.popen("tcping -n 1 -w 1 -p " + str(e.config["port"]) + " " + str(e.config["add"])).read()
+            if res.find("Average") != -1:  # 通
+                temp = res.split("=")
+                delay = temp[len(temp) - 1]
+                ddelay = int(delay[:-7])  # str->float，倒数第三个要
+                e.delay = ddelay
+            else:
+                e.delay = 100
         unavailableCount = 0
         speed = testSpeed(index, port)
         e.speed = speed
@@ -658,16 +662,7 @@ def chooseNode():
 def getTimeGap():
     with open(path, "r") as file:
         content = json.loads(file.read())
-    try:
-        pretime = content["current"]["time"]
-    except:
-        now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        content["current"] = {}
-        content["current"]["time"] = now
-        log("running in first time, create cache")
-        with open(path, "w") as file:
-            file.write(json.dumps(content))
-        return 99999
+    pretime = content["current"]["time"]
     pre = int(time.mktime(time.strptime(pretime, "%Y-%m-%d %H:%M:%S")))
     now = time.time()
     return now - int(pre)
@@ -714,7 +709,7 @@ def gui():
     keeponBtn["state"] = tkinter.ACTIVE
 
     state = tkinter.Label(root, bg="red")
-    label = tkinter.Label(root, text="测试中...")
+    label = tkinter.Label(root, text="测试中")
     bottom.add(state)
     bottom.add(label)
 
@@ -818,12 +813,44 @@ def guiMode(nodes):
 
 rawNodes = []
 
-count = 0
+
+def retrieveFromRemote():
+    global rawNodes
+    log("retrieving nodes from remote ... ")
+    try:
+        sf = paramiko.Transport(remoteSocket)
+        sf.connect(username="admin", password="admin")
+        sftp = paramiko.SFTPClient.from_transport(sf)
+        sftp.get("list.txt", os.path.join("list.txt"))  # 下载目录中文件
+    except Exception as e:
+        log("get from remote: failed")
+        print(e)
+    finally:
+        sf.close()
+    with open("list.txt", "r", encoding="utf-8") as file:
+        st = file.read()
+    log("latest: " + str(st.split("Hello")[-1]))
+    raw = st.split("Hello")[:-1]
+    log("partition: " + str(len(raw)))
+    for r in raw:
+        try:
+            vmess = b64decode(r).decode().split("\n")  # vmess链接
+        except Exception:
+            log(": decode error")
+            continue
+        for temp in vmess:
+            try:
+                b64content = temp[8:]  # 分离地址端口
+                content = b64decode(b64content).decode()  # 明文地址端口
+                rawNodes.append(content)
+            except Exception as e:
+                pass
+    log("total nodes: " + str(len(rawNodes)))
+    return rawNodes
 
 
 def retrieveFromUrl(url):
-    # log("parameter: " + str(url))
-    global rawNodes, count
+    global rawNodes
     available = False
     for i in range(0, 2):  # 两次机会
         try:
@@ -848,8 +875,7 @@ def retrieveFromUrl(url):
                 rawNodes.append(content)
             except Exception as e:
                 pass
-        count += len(vmess)
-        log(url[0] + ": " + str(len(vmess)) + ", total: " + str(count))
+        log(url[0] + ": " + str(len(vmess)) + ", total: " + str(len(rawNodes)))
         # log("after " + url[0] + ": " + str(len(rawNodes)))
         lock.release()
     else:
@@ -857,50 +883,25 @@ def retrieveFromUrl(url):
 
 
 def retrieveNodes():
-    log("retrieving nodes ... ")
-    global urls, rawNodes, count
+    log("retrieving nodes from url ... ")
+    global vmess, rawNodes
     executes = ThreadPoolExecutor(max_workers=4)
     running = []
-    for i in urls:
+    for i in vmess:
         r = executes.submit(retrieveFromUrl, (i,))
         running.append(r)
     out = 0
-    runping = []
-    while count < minNodes:
+    while len(rawNodes) < minNodes:
         out += 1
-        time.sleep(0.5)
-        if len(rawNodes) >= groupNodes:
-            # random.shuffle(rawNodes)
-            log("start pinging")
-            temp = rawNodes[:groupNodes]
-            rawNodes = rawNodes[groupNodes:]
-            q = threading.Thread(target=doTCPing, args=(temp,))
-            q.setDaemon(True)
-            runping.append(q)
-            q.start()
-        if out > 60:
-            # log("break appending ping")
+        time.sleep(1)
+        if out > 30:
             break
     for i in running:
         i.cancel()
     if len(rawNodes) < 10:
-        log("error: cannot retrieve nodes, update pool please")
+        log("error: cannot retrieve nodes, update node pool please")
         exit(-1)
-    while len(rawNodes) != 0:
-        # log("start after ping ," + str(len(rawNodes)))
-        temp = rawNodes[:groupNodes]
-        rawNodes = rawNodes[groupNodes:]
-        q = threading.Thread(target=doTCPing, args=(temp,))
-        q.setDaemon(True)
-        runping.append(q)
-        q.start()
-        # time.sleep(1)
-    for i in runping:
-        try:
-            i.join()
-        except:
-            pass
-    log("total nodes: " + str(count))
+    log("total nodes: " + str(len(rawNodes)))
     return rawNodes
 
 
@@ -913,31 +914,152 @@ def stateChecker(info):
         state['bg'] = "green"
 
 
+def retrieveSS():
+    ssNodes = []
+    for url in ss:
+        for i in range(0, 2):
+            res = os.popen("curl -skL " + url + " -m 20").read()
+            if len(res) < 100:
+                continue
+            else:
+                try:
+                    temp = json.loads(res)
+                    for j in temp:
+                        ssNodes.append(Node(100, j))
+                except:
+                    log("decode error " + url)
+                    pass
+                break
+    return ssNodes
+
+
+def genSSConfig(e: Node, port=1080):
+    baseConfig = {
+        "log": {
+            "access": "",
+            "error": "",
+            "loglevel": "info"
+        },
+        "inbounds": [
+            {
+                "tag": "proxy",
+                "port": port,
+                "listen": "0.0.0.0",
+                "protocol": "http"
+
+            }
+        ],
+        "outbounds": [
+            {
+                "tag": "proxy",
+                "protocol": "shadowsocks",
+                "settings": {
+                    "servers": [
+                        {
+                            "address": "10.0.0.9",
+                            "method": "aes-256-cfb",
+                            "password": "123456789",
+                            "port": 8090,
+                            "level": 1
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "network": "tcp"
+                }
+            },
+            {
+                "tag": "direct",
+                "protocol": "freedom",
+                "settings": {}
+            },
+            {
+                "tag": "block",
+                "protocol": "blackhole",
+                "settings": {
+                    "response": {
+                        "type": "http"
+                    }
+                }
+            }
+        ],
+        "routing": {
+            "domainStrategy": "AsIs",
+            "rules": [
+                {
+                    "type": "field",
+                    "inboundTag": [
+                        "api"
+                    ],
+                    "outboundTag": "api"
+                },
+                {
+                    "type": "field",
+                    "outboundTag": "proxy",
+                    "domain": [
+                        "github.com"
+                    ]
+                }
+            ]
+        }
+    }
+
+    baseConfig["outbounds"][0]["settings"]["servers"][0] = {
+        "address": e.config["server"],
+        "method": e.config["method"],
+        "password": e.config["password"],
+        "port": int(e.config["server_port"]),
+    }
+    return baseConfig
+
+
+
+
 if __name__ == '__main__':
-    print(version)
-    # gui()
-    mode = input("select mode: 1---Manual, 2---Automatic. default: 2\n")
-    if mode == "2":
-        if len(mode.split(" ")) == 2:
-            minDelay = int(mode.split(" ")[1])
-            log("set min delay = " + mode.split(" ")[1])
-    mode = mode.split(" ")[0]
-    killV2ray()
-    if useCache and getTimeGap() < cacheTime:
-        log("using cache")
-        nodes = readNodes()
-    else:
-        log("passing cache")
-        # pingNodes(getconfigsFromURL())
-        retrieveNodes()
-        log("Pingable nodes: " + str(len(avalist)))
-        nodes = customizeNode(avalist)
-        saveNode(nodes)
-        log("these nodes can access from cache in " + str(cacheTime) + "s")
-    if mode != "1":
-        log("Automatic mode")
-        guiMode(nodes)
-    else:
-        log("Manual mode")
-        cmdMode(nodes)
-    clearTestConfig()
+    # nd = retrieveSS()
+    nd = readNodes()
+    print(nd)
+    print(len(nd))
+    cfg = genSSConfig(nd[35], 1090)
+    q = subprocess.Popen("v2ray -config stdin:", stdin=subprocess.PIPE)
+
+    with open("tp.json", "w") as file:
+        file.write(json.dumps(cfg))
+
+    print(cfg)
+    q.stdin.write(json.dumps(cfg).encode())
+    q.stdin.close()
+    q.wait()
+    # pass
+    # print(version)
+    # mode = input("select mode: 1---Manual, 2---Auto, 3---Fast Auto. recommend: 2/3\n")
+    # # mode = "2"
+    # if mode == "3":
+    #     passPing = True
+    #     maxProcess = int(maxProcess * 1.5)
+    # killV2ray()
+    # if getTimeGap() < cacheTime and useCache:
+    #     log("using cache")
+    #     nodes = readNodes()
+    # else:
+    #     log("passing cache")
+    #     # pingNodes(getconfigsFromURL())
+    #     if useRemote:
+    #         pingNodes(retrieveFromRemote())
+    #     else:
+    #         pingNodes(retrieveNodes())
+    #
+    #     log("Pingable nodes: " + str(len(avalist)))
+    #     nodes = customizeNode(avalist)
+    #     saveNode(nodes)
+    #     log("these nodes can access from cache in " + str(cacheTime) + "s")
+    # if mode == "3":
+    #     log("Activate mode: Fast Auto")
+    #     guiMode(nodes)
+    # elif mode == "1":
+    #     log("Activate mode: Manual")
+    #     cmdMode(nodes)
+    # else:
+    #     log("Activate mode: Auto")
+    #     guiMode(nodes)
+    # clearTestConfig()
