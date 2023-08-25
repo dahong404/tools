@@ -1,4 +1,3 @@
-from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 import warnings
 
@@ -15,75 +14,71 @@ import json
 import tkinter
 import re
 
-# 两个找节点池的地方
-# https://androidrepo.com/repo/Leon406-Sub
-# https://i.sqeven.me/q
-
+hiddenURL = "https://f.kxyz.eu.org/f.php?r=aHR0cHM6Ly9iLmx1eHVyeS9saW5rL25EcWdlQlh4NUl5SjJ2RnQ/c3ViPTM="
 version = "AutoConfig v2.1"
 # 结点设置
 minNodes = 200  # 从结点池中获取的结点数小于N就累加到大于N为止
-acceptNodes = 500  # ping的结点个数
+acceptNodes = 400  # ping的结点个数
 useRandom = True  # 结点池的访问次序是否随机
 minDelay = 0  # 丢弃时延小于N ms的结点，过小时延的结点大概率不通
 passPing = False  # 跳过ping
 useCache = False  # 开启后，节点会保存cacheTime秒供下次使用
 cacheTime = 14400
-# protocol = "vmess"
 useExclude = False  # 开启后会排除下列地区的结点
 exclude = re.compile('HK|TW|US')
+autoLoginFlag = True  # 校园网自动登录
+updateFlag = True  # 自动配置脚本自我升级
 
 # 测速设置
-maxTime = 8  # 测速时间：N 秒
+maxTime = 15  # 测速时间：N 秒
 minSpeed = 50  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
 testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换，两端的单双引号不能改
 
 basePort = 20000  # 多线程测速起始端口
-maxProcess = 24  # 同时运行的测速线程数[仅模式2会使用多线程测速]
-limitNodes = 10  # 测到N个可用结点后自动结束测速
+maxProcess = 20  # 同时运行的测速线程数
+limitNodes = 10  # 测到N个可用结点后结束测速
 
-debug = False  # 查看各代理线程工作状态用
+debug = False  # 检查各代理线程工作状态用
 daemonProxy = True  # 开启后，每隔daemonTime秒检查代理状态，若断开则尝试自动重新配置
-daemonTime = 300
+daemonTime = 600
 
-useRemote = True  # 从远程获取结点，加快获取结点的速度
+useRemote = False  # 从远程获取结点，加快获取结点的速度
 remoteSocket = ("192.168.123.1", 22)
+
+pxport = 23334
+
 try:
     import paramiko
 except:
     useRemote = False
 
-ss = [  # ss结点池，仅接受明文
-
-    "https://proxies.bihai.cf/ss/sub",
-    "https://proxypool.remon602.ga/ss/sub"
-]
-
 Avmess = [  # vmess优质结点池，仅接受b64
-    "https://proxies.bihai.cf/vmess/sub",
-    "https://free.kingfu.cf/vmess/sub",
-    "https://sspool.herokuapp.com/vmess/sub",
-    "https://proxypool.remon602.ga/vmess/sub",
-    "https://ednovas.design/vmess/sub",
+    "https://gitlab.com/mfuu/v2ray/-/raw/master/v2ray",
+    "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
+    "https://raw.fastgit.org/ZywChannel/free/main/sub",
+    "https://raw.fastgit.org/freefq/free/master/v2",
+    "https://v2ray.neocities.org/v2ray.txt",
+    "https://nodefree.org/dy/2023/08/20230825.txt",
+    "https://clashnode.com/wp-content/uploads/2023/08/20230825.txt",
+    "https://raw.githubusercontent.com/xieshunxi1/subscribe_clash_v2ray/main/subscribe/v2ray.txt",
+    # "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
+    "https://raw.fastgit.org/Pawdroid/Free-servers/main/sub",
+    "https://freefq.neocities.org/free.txt",
+    "https://youlianboshi.netlify.com",
+    "https://free.jingfu.cf/vmess/sub",
+    "https://raw.fastgit.org/freefq/free/master",
+
 ]
 
-vmess = [  # vmess普通结点池，仅接受b64
-    "https://proxy.51798.xyz/vmess/sub",
-    "https://v2ray.banyunxiaoxi.ml/",
+vmess = [  # 屏蔽结点池，需要外网环境才能访问，仅接受b64
+    "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
+    "https://raw.githubusercontent.com/openrunner/clash-freenode/main/v2ray.txt",
     "https://jiang.netlify.app/",
-    "https://youlianboshi.netlify.com/",
-    "https://jiedian.faka77.tk/vmess/sub",
-    "https://gooii.ml/v2ray/sub",
-    # "https://raw.githubusercontent.com/adiwzx/freenode/main/adispeed.txt"
-    "https://etproxypool.ga/vmess/sub",
-    "https://dlj.li/oq112r",
-    "https://free.dswang.ga/vmess/sub",
-    "http://8.135.91.61/vmess/sub",
-    "https://www.linbaoz.com/vmess/sub",
-    "https://fq.lonxin.net/vmess/sub",
-    "https://hello.stgod.com/vmess/sub",
-    "https://proxypool.fly.dev/vmess/sub",
-    "https://free.zdl.im/vmess/sub",
-    "https://ss.dswang.ga:8443/vmess/sub"
+    "https://sub.pmsub.me/base64",
+    "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
+    "https://raw.githubusercontent.com/xieshunxi1/subscribe_clash_v2ray/main/subscribe/v2ray.txt",
+    "https://raw.githubusercontent.com/vveg26/get_proxy/main/dist/v2ray.config.txt"
+
 ]
 
 if useRandom:
@@ -92,23 +87,10 @@ if useRandom:
 for i in Avmess:
     vmess.insert(0, i)
 
-# 失效或暂时失效
-# "https://emby.luoml.eu.org/vmess/sub",
-# "https://hm2019721.ml/vmess/sub",# "https://raw.fastgit.org/Leon406/Sub/master/sub/share/v2",
-# "https://raw.githubusercontent.com/Leon406/Sub/master/sub/share/v2",
-# "https://raw.githubusercontent.com/ssrsub/ssr/master/v2ray"
-# "https://6166888.xyz/vmess/sub"
-# "https://raw.githubusercontent.com/ssrsub/ssr/master/v2ray"
-# "https://v2.tjiasu.xyz/api/v2/client/subscribe?token=07288400e6328b51398f264cffe222de"
-# "https://raw.githubusercontent.com/ssrsub/ssr/master/ss-sub",
-# "https://bulink.xyz/api/subscribe/?token=fjdqq&sub_type=vmess"
-# 'https://www.233660.xyz/vmess/sub'
-
-
 confdir = "v2ray_win_temp/"
 path = confdir + "36ad1899-d3d4-49f1-9dd2-7e2052059f81.json"
 v2rayNPath = "v2rayN.exe"
-curlPath = "curl/curl.exe"
+curlPath = "curl.exe"
 v2rayPath = "v2ray.exe"
 
 
@@ -131,11 +113,7 @@ class Node:
 avalist = []
 
 
-def timeTest(i, port):
-    pass
-
-
-def testSpeed(i, port=1080, maxTime=maxTime):
+def testSpeed(i, port=pxport, maxTime=maxTime):
     try:
         driver = os.popen(
             'curl -x http://localhost:' + str(port) + ' -m ' + str(
@@ -154,7 +132,6 @@ def testSpeed(i, port=1080, maxTime=maxTime):
             if count >= 2:
                 res = 100
     except Exception as e:
-
         return -1
     return res
 
@@ -186,37 +163,19 @@ def pingNodes(configs):  # 入：字符串数组
             i.join()  # 等待全部ping结束
         except Exception:
             pass
-    ave = len(configs) / (time.time() - start)
-
+    g = time.time() - start
+    if g == 0:
+        ave = 999
+    else:
+        ave = len(configs) / g
     log("speed: " + ("%.2f" % ave) + " pics/s")
 
-
-# def doPing(Nconfigs):  # 入：字典数组
-#     global avalist
-#     for config in Nconfigs:
-#         res = 'res'
-#         try:
-#             cfg = json.loads(config)  # str->字典
-#             if str(cfg["ps"]).find("CN") != -1 and not acceptCN:
-#                 log("A CN node, discard")
-#                 continue
-#             addr = cfg["add"]
-#             f = os.popen("ping " + addr + " -w 500 -n 1")
-#             res = f.read()
-#         except Exception:
-#             pass
-#         if res.find("平均") != -1:  # 通
-#             temp = res.split("=")
-#             delay = temp[len(temp) - 1]
-#             ddelay = int(delay[:-3])  # str->int
-#             avalist.append(Node(ddelay, cfg))
 
 info = ""
 
 
 def doTCPing(Nconfigs):
     global avalist, info
-    # log("len: " + str(len(Nconfigs)))
     if not passPing:
         for config in Nconfigs:
             res = 'res'
@@ -251,8 +210,6 @@ def getconfigsFromURL():  # 回：字符串数组
         log("retrieving nodes from " + url)
         for i in range(0, 2):  # 两次机会
             try:
-                # req = request.Request(url=url, headers=headers)
-                # r = request.urlopen(req, timeout=4).read().decode("utf-8")
                 r = os.popen(curlPath + " " + url + " -skL -m 10").read()
                 if len(r) < 100:
                     raise RuntimeError
@@ -283,6 +240,11 @@ def getconfigsFromURL():  # 回：字符串数组
     return configs
 
 
+def autoLogin():
+    res = os.popen("login.sh").read()
+    log(res)
+
+
 def detectBaidu(port):
     baidu = os.popen("tcping -n 2 -w 1 -p " + str(port) + " localhost").read()
     if baidu.find("Average") != -1:
@@ -292,16 +254,19 @@ def detectBaidu(port):
 
 
 # -L 重定向 -A "header" -I只要头 -s静默模式 -m超时秒数
-def detectConn(port=1080):
+def detectConn(port=pxport, check=False):
     failCount = 0
-    time.sleep(random.randint(1, 4) + random.randint(0, 5) * 0.1)
-    while not detectBaidu(port):  # 等待v2ray启动
-        time.sleep(2)
-        failCount += 1
-        if failCount > 3:
-            log("error: cannot start proxy in port " + str(port))
-            return False
-    timeout = str(6 + failCount)
+    if not check:
+        time.sleep(random.randint(1, 4) + random.randint(0, 5) * 0.1)
+        while not detectBaidu(port):  # 等待v2ray启动
+            time.sleep(2)
+            failCount += 1
+            if failCount > 3:
+                log("error: cannot start proxy in port " + str(port))
+                return False
+        timeout = str(6 + failCount)
+    else:
+        timeout = str(5)
     for i in range(0, 2):
         google = os.popen(
             curlPath + " -x http://localhost:" + str(port) + " -skLI www.google.com  -m " + timeout).read(150)
@@ -350,22 +315,22 @@ def writeConfig(newcfg: dict, rpath=path):
         file.write(json.dumps(newcfg))
 
 
-def genConfig(e: Node, port=1080):  # 生成配置
+def genConfig(e: Node, port=pxport):  # 生成配置
     try:
         with open(path, "r") as file:
             basecfg = json.loads(file.read(), object_pairs_hook=OrderedDict)
 
         proxy = basecfg["outbounds"][0]  # 代理服务器配置
 
-        if port == 1080:
+        if port == pxport:
             basecfg["inbounds"] = [{
                 "protocol": "socks",
                 "listen": "0.0.0.0",
-                "port": 1079
+                "port": pxport - 1
             }, {
                 "protocol": "http",
                 "listen": "0.0.0.0",
-                "port": 1080
+                "port": pxport
             }]
         else:
             basecfg["inbounds"] = [
@@ -459,14 +424,15 @@ def customizeNode(avalist):  # 筛选且排序
     return Alist
 
 
-def getCountry(port=1080):
+def getCountry(port=pxport):
     try:
         info = json.loads(
-            os.popen(curlPath + " -x http://localhost:" + str(port) + "  https://api.myip.la/en?json -skL -m 8").read())
-        if port == 1080:
-            return str(info["location"]["country_name"] + "(" + info["location"]["country_code"] + ")")
+            os.popen(curlPath + " -x http://localhost:" + str(
+                port) + "  http://ip-api.com/json/?fields=61439 -skL -m 8").read())
+        if port == pxport:
+            return str(info["countryCode"])
         else:
-            return str(info["location"]["country_code"])
+            return str(info["countryCode"])
     except:
         return "Unknown"
 
@@ -486,7 +452,7 @@ def mulitTest(nodes):
             time.sleep(3)
             if unavailableCount > maxProcess:
                 log("too many unavailable nodes detected, try another mode please")
-                exit(-1)
+                # exit(-1)
         else:
             if len(speedList) >= limitNodes:
                 log(">>>>INFO>>>>: available nodes max to " + str(limitNodes) + ", stop adding test process")
@@ -568,6 +534,7 @@ def singleSpeedTest(port, process, e: Node, index):
     else:
         if passPing:
             res = os.popen("tcping -n 1 -w 1 -p " + str(e.config["port"]) + " " + str(e.config["add"])).read()
+
             if res.find("Average") != -1:  # 通
                 temp = res.split("=")
                 delay = temp[len(temp) - 1]
@@ -725,7 +692,7 @@ def gui():
 
 
 def proxyDaemon():  # 检查连接状态，若中断则自动重新配置
-    global state, label, box, speedList
+    global state, label, box, speedList, updateFlag
     while str(label['text']).find("OK") == -1:
         time.sleep(5)
     log("proxy daemon thread activate")
@@ -742,14 +709,20 @@ def proxyDaemon():  # 检查连接状态，若中断则自动重新配置
             label['text'] = "fixing..."
             state['bg'] = "yellow"
             log("fixing ...")
+
             current = box.curselection()[0]
             fixed = False
             for i in range(starter, len(Alist)):
-                if i >= 5:
-                    log("5 attempts to reconnect failed, give up")
-                    break
-                log("try: " + str(i))
+                if autoLoginFlag:
+                    log("try auto login")
+                    autoLogin()
+                # if i >= 5:
+                #     log("5 attempts to reconnect failed, give up")
+                #     break
                 e = Alist[i]
+                add = e.config["add"]
+                pt = e.config["port"]
+                log("try: " + str(i) + ": " + str(add) + " " + str(pt))
                 if current == e:
                     continue
                 else:
@@ -774,8 +747,25 @@ def proxyDaemon():  # 检查连接状态，若中断则自动重新配置
             break
         else:
             log("connection: ok")
+            if updateFlag:
+                updateFlag = False
+                update_tools()
         time.sleep(daemonTime)
     log("proxy daemon thread exit")
+
+
+def update_tools():
+    for i in range(0, 2):
+        rawres = os.popen("curl -x http://localhost:" + str(
+            pxport) + " -skL https://raw.githubusercontent.com/dahong404/tools/master/tools.py")
+        res = rawres.buffer.read().decode('utf-8')
+        if res.find("version") != -1:
+            with open("tools.py", "w", encoding='utf-8') as file:
+                file.write(res)
+            log("self update success: tools.py")
+            return
+        else:
+            log("self update failed: tools.py")
 
 
 def cmdMode(nodes: list):
@@ -788,7 +778,6 @@ def cmdMode(nodes: list):
         log("Configuration completed, testing speed ...")
         testSpeed(i, maxTime=12)
         log("current country: " + getCountry() + ", delay:" + str(e.delay) + "ms")
-
         if input("Are you satisfied with this result ? [y/n] \n") == "n":
             continue
         break
@@ -854,7 +843,10 @@ def retrieveFromUrl(url):
     available = False
     for i in range(0, 2):  # 两次机会
         try:
-            r = os.popen(curlPath + " " + url[0] + " -skL -m 10").read()
+            if url[1]:
+                r = os.popen(curlPath + " -x http://localhost:" + str(pxport) + " " + url[0] + " -skL -m 10").read()
+            else:
+                r = os.popen(curlPath + " " + url[0] + " -skL -m 10").read()
             if len(r) < 100:
                 raise RuntimeError
             available = True
@@ -884,24 +876,39 @@ def retrieveFromUrl(url):
 
 def retrieveNodes():
     log("retrieving nodes from url ... ")
+    conn = detectConn(check=True)
+    if conn:
+        log("detect proxy, use proxy")
+    else:
+        log("proxy not ready, use direct")
     global vmess, rawNodes
     executes = ThreadPoolExecutor(max_workers=4)
     running = []
     for i in vmess:
-        r = executes.submit(retrieveFromUrl, (i,))
+        r = executes.submit(retrieveFromUrl, (i, conn))
         running.append(r)
     out = 0
+    count = 0
     while len(rawNodes) < minNodes:
         out += 1
         time.sleep(1)
-        if out > 30:
+        doneFlag = True
+        for i in running:
+            currDone = i.done()
+            if currDone:
+                count += 1
+            doneFlag = (doneFlag and currDone)
+        log("waiting ... [" + str(count) + "/" + str(len(running)) + "]")
+        count = 0
+        if doneFlag or out > 30:
             break
     for i in running:
         i.cancel()
     if len(rawNodes) < 10:
-        log("error: cannot retrieve nodes, update node pool please")
+        log("error: cannot retrieve nodes, need update pools")
         exit(-1)
     log("total nodes: " + str(len(rawNodes)))
+    # exit(-1)
     return rawNodes
 
 
@@ -914,152 +921,36 @@ def stateChecker(info):
         state['bg'] = "green"
 
 
-def retrieveSS():
-    ssNodes = []
-    for url in ss:
-        for i in range(0, 2):
-            res = os.popen("curl -skL " + url + " -m 20").read()
-            if len(res) < 100:
-                continue
-            else:
-                try:
-                    temp = json.loads(res)
-                    for j in temp:
-                        ssNodes.append(Node(100, j))
-                except:
-                    log("decode error " + url)
-                    pass
-                break
-    return ssNodes
-
-
-def genSSConfig(e: Node, port=1080):
-    baseConfig = {
-        "log": {
-            "access": "",
-            "error": "",
-            "loglevel": "info"
-        },
-        "inbounds": [
-            {
-                "tag": "proxy",
-                "port": port,
-                "listen": "0.0.0.0",
-                "protocol": "http"
-
-            }
-        ],
-        "outbounds": [
-            {
-                "tag": "proxy",
-                "protocol": "shadowsocks",
-                "settings": {
-                    "servers": [
-                        {
-                            "address": "10.0.0.9",
-                            "method": "aes-256-cfb",
-                            "password": "123456789",
-                            "port": 8090,
-                            "level": 1
-                        }
-                    ]
-                },
-                "streamSettings": {
-                    "network": "tcp"
-                }
-            },
-            {
-                "tag": "direct",
-                "protocol": "freedom",
-                "settings": {}
-            },
-            {
-                "tag": "block",
-                "protocol": "blackhole",
-                "settings": {
-                    "response": {
-                        "type": "http"
-                    }
-                }
-            }
-        ],
-        "routing": {
-            "domainStrategy": "AsIs",
-            "rules": [
-                {
-                    "type": "field",
-                    "inboundTag": [
-                        "api"
-                    ],
-                    "outboundTag": "api"
-                },
-                {
-                    "type": "field",
-                    "outboundTag": "proxy",
-                    "domain": [
-                        "github.com"
-                    ]
-                }
-            ]
-        }
-    }
-
-    baseConfig["outbounds"][0]["settings"]["servers"][0] = {
-        "address": e.config["server"],
-        "method": e.config["method"],
-        "password": e.config["password"],
-        "port": int(e.config["server_port"]),
-    }
-    return baseConfig
-
-
-
-
 if __name__ == '__main__':
-    # nd = retrieveSS()
-    nd = readNodes()
-    print(nd)
-    print(len(nd))
-    cfg = genSSConfig(nd[35], 1090)
-    q = subprocess.Popen("v2ray -config stdin:", stdin=subprocess.PIPE)
-
-    with open("tp.json", "w") as file:
-        file.write(json.dumps(cfg))
-
-    print(cfg)
-    q.stdin.write(json.dumps(cfg).encode())
-    q.stdin.close()
-    q.wait()
-    # pass
-    # print(version)
+    print(version)
     # mode = input("select mode: 1---Manual, 2---Auto, 3---Fast Auto. recommend: 2/3\n")
-    # # mode = "2"
-    # if mode == "3":
-    #     passPing = True
-    #     maxProcess = int(maxProcess * 1.5)
+    mode = "3"
+    if mode == "3":
+        passPing = True
+        maxProcess = int(maxProcess * 1.5)
     # killV2ray()
-    # if getTimeGap() < cacheTime and useCache:
-    #     log("using cache")
-    #     nodes = readNodes()
-    # else:
-    #     log("passing cache")
-    #     # pingNodes(getconfigsFromURL())
-    #     if useRemote:
-    #         pingNodes(retrieveFromRemote())
-    #     else:
-    #         pingNodes(retrieveNodes())
-    #
-    #     log("Pingable nodes: " + str(len(avalist)))
-    #     nodes = customizeNode(avalist)
-    #     saveNode(nodes)
-    #     log("these nodes can access from cache in " + str(cacheTime) + "s")
-    # if mode == "3":
-    #     log("Activate mode: Fast Auto")
-    #     guiMode(nodes)
-    # elif mode == "1":
-    #     log("Activate mode: Manual")
-    #     cmdMode(nodes)
-    # else:
-    #     log("Activate mode: Auto")
-    #     guiMode(nodes)
-    # clearTestConfig()
+    if getTimeGap() < cacheTime and useCache:
+        log("using cache")
+        nodes = readNodes()
+    else:
+        log("passing cache")
+        # pingNodes(getconfigsFromURL())
+        if useRemote:
+            pingNodes(retrieveFromRemote())
+        else:
+            pingNodes(retrieveNodes())
+
+        log("Pingable nodes: " + str(len(avalist)))
+        nodes = customizeNode(avalist)
+        saveNode(nodes)
+        log("these nodes can access from cache in " + str(cacheTime) + "s")
+    if mode == "3":
+        log("Activate mode: Fast Auto")
+        guiMode(nodes)
+    elif mode == "1":
+        log("Activate mode: Manual")
+        cmdMode(nodes)
+    else:
+        log("Activate mode: Auto")
+        guiMode(nodes)
+    clearTestConfig()
