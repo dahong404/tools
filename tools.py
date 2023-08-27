@@ -368,10 +368,11 @@ def genConfig(e: Node, port=pxport):  # 生成配置
     return basecfg
 
 
-def customizeNode(avalist):  # 筛选且排序
+def customizeNode(unsortAvalist):  # 筛选且排序
+    global avalist
     Discardlist = []
     Alist = []
-    for e in avalist:
+    for e in unsortAvalist:
         if e.delay < minDelay:
             Discardlist.append(e)
         else:
@@ -381,7 +382,7 @@ def customizeNode(avalist):  # 筛选且排序
             if Alist[j].delay > Alist[j + 1].delay:
                 Alist[j], Alist[j + 1] = Alist[j + 1], Alist[j]
     log("customize complete, discard: " + str(len(Discardlist)) + ", accept: " + str(len(Alist)))
-    return Alist
+    avalist = Alist
 
 
 def getCountry(port=pxport):
@@ -898,7 +899,7 @@ if __name__ == '__main__':
     # killV2ray()
     if getTimeGap() < cacheTime and useCache:
         log("cache enable")
-        nodes = readNodes()
+        avalist = readNodes()
     else:
         log("cache disable")
         # pingNodes(getconfigsFromURL())
@@ -906,18 +907,17 @@ if __name__ == '__main__':
             pingNodes(retrieveFromRemote())
         else:
             pingNodes(retrieveNodes())
-
         log("Pingable nodes: " + str(len(avalist)))
-        nodes = customizeNode(avalist)
-        saveNode(nodes)
-        log("these nodes can access from cache in " + str(cacheTime) + "s")
+        customizeNode(avalist)
+        saveNode(avalist)
+        log(str(len(avalist))+" nodes cached for " + str(cacheTime) + "s")
     if mode == "3":
         log("Activate mode: Fast Auto")
-        guiMode(nodes)
+        guiMode(avalist)
     elif mode == "1":
         log("Activate mode: Manual")
-        cmdMode(nodes)
+        cmdMode(avalist)
     else:
         log("Activate mode: Auto")
-        guiMode(nodes)
+        guiMode(avalist)
     clearTestConfig()
