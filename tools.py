@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import warnings
-#new file
+
+# new file
 warnings.filterwarnings("ignore")
 import subprocess
 from collections import OrderedDict
@@ -9,30 +10,30 @@ import time
 import pickle
 import threading
 import os
-from base64 import *
+from base64 import b64decode
 import json
 import tkinter
 import re
 
 hiddenURL = "https://f.kxyz.eu.org/f.php?r=aHR0cHM6Ly9iLmx1eHVyeS9saW5rL25EcWdlQlh4NUl5SjJ2RnQ/c3ViPTM="
-version = "AutoConfig v2.1"
+version = "AutoConfig v2.2"
 # 结点设置
 minNodes = 200  # 从结点池中获取的结点数小于N就累加到大于N为止
 acceptNodes = 400  # ping的结点个数
 useRandom = True  # 结点池的访问次序是否随机
-minDelay = 0  # 丢弃时延小于N ms的结点，过小时延的结点大概率不通
-passPing = False  # 跳过ping
+minDelay = 0  # 丢弃时延小于N ms的结点，避免遇到国内中转
+passPing = False  # 跳过ping，以加快速度
 useCache = False  # 开启后，节点会保存cacheTime秒供下次使用
-cacheTime = 14400
+cacheTime = 3600
 useExclude = False  # 开启后会排除下列地区的结点
 exclude = re.compile('HK|TW|US')
 autoLoginFlag = True  # 校园网自动登录
-updateFlag = True  # 自动配置脚本自我升级
+updateFlag = True  # 自动更新
 
 # 测速设置
-maxTime = 15  # 测速时间：N 秒
+maxTime = 12  # 测速时间：N 秒
 minSpeed = 50  # 小于N K/s的不要，=-1表示不进行速度筛选，能访问谷歌就要. 当全部测速都不通过时需要设置成-1，或者更换testResource
-testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换，两端的单双引号不能改
+testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换
 
 basePort = 20000  # 多线程测速起始端口
 maxProcess = 20  # 同时运行的测速线程数
@@ -45,53 +46,53 @@ daemonTime = 600
 useRemote = False  # 从远程获取结点，加快获取结点的速度
 remoteSocket = ("192.168.123.1", 22)
 
-pxport = 23334
+pxport = 23334  # 代理端口，需要等于v2rayN的socks端口+1，等于v2rayN的http端口
 
 try:
     import paramiko
 except:
     useRemote = False
 
-Avmess = [  # vmess优质结点池，仅接受b64
+# 结点池获取 https://github.com/WilliamStar007/ClashX-V2Ray-TopFreeProxy/blob/main/v2ray.md
+Avmess = [  # 普通结点池，可直接访问，仅接受b64
     "https://gitlab.com/mfuu/v2ray/-/raw/master/v2ray",
     "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
     "https://raw.fastgit.org/ZywChannel/free/main/sub",
-    "https://raw.fastgit.org/freefq/free/master/v2",
     "https://v2ray.neocities.org/v2ray.txt",
-    "https://nodefree.org/dy/2023/08/20230825.txt",
-    "https://clashnode.com/wp-content/uploads/2023/08/20230825.txt",
-    "https://raw.githubusercontent.com/xieshunxi1/subscribe_clash_v2ray/main/subscribe/v2ray.txt",
-    # "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
+    # "https://nodefree.org/dy/2023/08/20230825.txt",
+    # "https://clashnode.com/wp-content/uploads/2023/08/20230825.txt",
     "https://raw.fastgit.org/Pawdroid/Free-servers/main/sub",
     "https://freefq.neocities.org/free.txt",
     "https://youlianboshi.netlify.com",
     "https://free.jingfu.cf/vmess/sub",
-    "https://raw.fastgit.org/freefq/free/master",
-
+    "https://tt.vg/freev2",
+    "https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray",
+    "https://raw.githubusercontent.com/learnhard-cn/free_proxy_ss/main/free",
+    # "https://raw.githubusercontent.com/pojiezhiyuanjun/2023/master/0826.txt",
+    "https://raw.fastgit.org/freefq/free/master/v2",
+    "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
 ]
 
-vmess = [  # 屏蔽结点池，需要外网环境才能访问，仅接受b64
-    "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
+vmess = [  # 屏蔽结点池，需要代理才可访问，仅接受b64
     "https://raw.githubusercontent.com/openrunner/clash-freenode/main/v2ray.txt",
     "https://jiang.netlify.app/",
     "https://sub.pmsub.me/base64",
     "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
     "https://raw.githubusercontent.com/xieshunxi1/subscribe_clash_v2ray/main/subscribe/v2ray.txt",
     "https://raw.githubusercontent.com/vveg26/get_proxy/main/dist/v2ray.config.txt"
-
 ]
-
-if useRandom:
-    random.shuffle(vmess)
 
 for i in Avmess:
     vmess.insert(0, i)
 
-confdir = "v2ray_win_temp/"
-path = confdir + "36ad1899-d3d4-49f1-9dd2-7e2052059f81.json"
-v2rayNPath = "v2rayN.exe"
-curlPath = "curl.exe"
-v2rayPath = "v2ray.exe"
+if useRandom:
+    random.shuffle(vmess)
+
+confdir = "v2ray_win_temp/"  # 服务器配置文件目录
+path = confdir + "36ad1899-d3d4-49f1-9dd2-7e2052059f81.json"  # 自定义服务器配置文件
+v2rayNPath = "v2rayN.exe"  # v2rayN图形界面
+curlPath = "curl.exe"  # 网络请求工具
+v2rayPath = "v2ray.exe"  # v2ray内核
 
 
 def log(str, showTime=True):
@@ -119,15 +120,15 @@ def testSpeed(i, port=pxport, maxTime=maxTime):
             'curl -x http://localhost:' + str(port) + ' -m ' + str(
                 maxTime) + ' -skL -o c:/windows/nul ' + testResource + ' --limit-rate 1000k -w "%{speed_download}"')
         res = int(float(driver.read()) / 1024)
-        log("★★★INFO★★★: node " + str(i) + " on port " + str(port) + ": " + str(res) + "KB/s")
+        log("[" + str(i) + "/" + str(len(avalist)) + "]" + " : " + str(res) + "KB/s")
         if res == 0:
             count = 0
-            for i in range(0, 5):
+            for i in range(0, 4):
                 accessTime = os.popen('curl -x http://localhost:' + str(
                     port) + ' -o /dev/null -skL www.google.com -m 3 -w "%{time_total}"').read()
                 time.sleep(0.1)
                 daccessTime = float(accessTime[:-4])
-                if daccessTime < 1.0:
+                if daccessTime < 2.0:
                     count += 1
             if count >= 2:
                 res = 100
@@ -201,51 +202,12 @@ def doTCPing(Nconfigs):
             avalist.append(Node(100, cfg))
 
 
-def getconfigsFromURL():  # 回：字符串数组
-    configs = []
-    for url in vmess:
-        available = False
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE'}
-        log("retrieving nodes from " + url)
-        for i in range(0, 2):  # 两次机会
-            try:
-                r = os.popen(curlPath + " " + url + " -skL -m 10").read()
-                if len(r) < 100:
-                    raise RuntimeError
-                available = True
-                break
-            except Exception as e:
-                log("request timeout, retrying...")
-                pass
-        if available:
-            try:
-                vmess = b64decode(r).decode().split("\n")  # vmess链接
-            except Exception:
-                log("decode error, pass it")
-                continue
-            for temp in vmess:
-                try:
-                    b64content = temp[8:]  # 分离地址端口
-                    content = b64decode(b64content).decode()  # 明文地址端口
-                    configs.append(content)
-                except Exception as e:
-                    pass
-            count = len(configs)
-            if count < minNodes:
-                log("no more than " + str(minNodes) + " node, actually: " + str(count) + ", do append")
-                continue
-            break
-    log("total nodes: " + str(len(configs)))
-    return configs
-
-
 def autoLogin():
     res = os.popen("login.sh").read()
     log(res)
 
 
-def detectBaidu(port):
+def detectV2(port):
     baidu = os.popen("tcping -n 2 -w 1 -p " + str(port) + " localhost").read()
     if baidu.find("Average") != -1:
         return True
@@ -256,18 +218,20 @@ def detectBaidu(port):
 # -L 重定向 -A "header" -I只要头 -s静默模式 -m超时秒数
 def detectConn(port=pxport, check=False):
     failCount = 0
+    opp = 2
     if not check:
         time.sleep(random.randint(1, 4) + random.randint(0, 5) * 0.1)
-        while not detectBaidu(port):  # 等待v2ray启动
+        while not detectV2(port):  # 等待v2ray启动
             time.sleep(2)
             failCount += 1
             if failCount > 3:
-                log("error: cannot start proxy in port " + str(port))
+                # log("error: cannot start proxy in port " + str(port))
                 return False
         timeout = str(6 + failCount)
     else:
         timeout = str(5)
-    for i in range(0, 2):
+        opp = 1
+    for i in range(0, opp):
         google = os.popen(
             curlPath + " -x http://localhost:" + str(port) + " -skLI www.google.com  -m " + timeout).read(150)
         if str(google).find("ISO-8859-1") != -1:
@@ -319,9 +283,7 @@ def genConfig(e: Node, port=pxport):  # 生成配置
     try:
         with open(path, "r") as file:
             basecfg = json.loads(file.read(), object_pairs_hook=OrderedDict)
-
         proxy = basecfg["outbounds"][0]  # 代理服务器配置
-
         if port == pxport:
             basecfg["inbounds"] = [{
                 "protocol": "socks",
@@ -340,13 +302,11 @@ def genConfig(e: Node, port=pxport):  # 生成配置
                     "port": port
                 }
             ]
-
         basecfg["current"]["delay"] = str(e.delay)  # debug用附加信息
         basecfg["current"]["config"] = e.config
         basecfg["current"]["speed"] = e.speed
         basecfg["current"]["location"] = e.location
         basecfg["current"]["time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
         proxySetting = {
             "vnext": [
                 {
@@ -448,14 +408,15 @@ def mulitTest(nodes):
     i = 0
     for e in nodes:
         while running >= maxProcess:
-            log("main: sleep, running process max to " + str(maxProcess))
+            log("running process: " + str(maxProcess) + ", obtain [" + str(len(speedList)) + "/" + str(
+                limitNodes) + "] available")
             time.sleep(3)
             if unavailableCount > maxProcess:
-                log("too many unavailable nodes detected, try another mode please")
+                log("warning: too many unavailable nodes, check settings")
                 # exit(-1)
         else:
             if len(speedList) >= limitNodes:
-                log(">>>>INFO>>>>: available nodes max to " + str(limitNodes) + ", stop adding test process")
+                log("stop testing, [" + str(len(speedList)) + "/" + str(limitNodes) + "] available obtained")
                 break
             running += 1
             # log("add a process, now: " + str(running))
@@ -469,10 +430,10 @@ def mulitTest(nodes):
         time.sleep(0.5)
     chooseBtn["state"] = tkinter.ACTIVE
     keeponBtn["state"] = tkinter.ACTIVE
-    if label["text"] != "测试中":
+    if label["text"] == "测试中":
         label["text"] = "请选择"
     while running > 0:
-        log(">>>>INFO>>>>: waiting running process done, now: " + str(running))
+        log("wait running process done, now: " + str(running))
         time.sleep(5)
     log("done, " + str(i) + " tested: " + str(len(speedList)) + " available, " + str(
         i - len(speedList)) + " unavailable")
@@ -487,13 +448,13 @@ def mulitTest(nodes):
 
     clearTestConfig()
     if len(speedList) == 0:
-        log("no nodes available, consider reduce minSpeed or set minSpeed=-1")
-
+        log("error: no nodes available, check settings")
     try:
         while True:
             while not keepon:
                 time.sleep(1)
             else:
+                log("continue testing ...")
                 for j in range(i + 1, len(nodes)):
                     e = nodes[j]
                     if running >= maxProcess:
@@ -505,18 +466,18 @@ def mulitTest(nodes):
                         time.sleep(random.randint(0, 5) * 0.1)
                         # log("testing node: " + str(i) + "/" + str(len(nodes)) + " on port " + str(basePort))
                         startTest(basePort, e, j)
-
                 while running > 0:
-                    log(">>>>INFO>>>>: waiting running process done, now: " + str(running))
+                    log("wait running process done, now: " + str(running))
                     time.sleep(5)
-                log("finish ")
+                log("done, " + str(j - 1) + " tested: " + str(len(speedList)) + " available, " + str(
+                    j - 1 - len(speedList)) + " unavailable")
                 keeponBtn["state"] = tkinter.ACTIVE
                 if label["text"] == "测试中":
                     label["text"] = "请选择"
-                i += 32
+                i += maxProcess
                 keepon = False
     except Exception as e:
-        print(e)
+        log("All nodes tested, nothing to do, bye")
         pass
 
 
@@ -529,12 +490,11 @@ unavailableCount = 0
 def singleSpeedTest(port, process, e: Node, index):
     global speedList, running, box, zeroSpeedList, attention, unavailableCount
     if not detectConn(port):
-        log("★★★INFO★★★: node " + str(index) + " on port " + str(port) + ": Unavailable")
+        log("[" + str(index) + "/" + str(len(avalist)) + "] : ×")
         unavailableCount += 1
     else:
         if passPing:
             res = os.popen("tcping -n 1 -w 1 -p " + str(e.config["port"]) + " " + str(e.config["add"])).read()
-
             if res.find("Average") != -1:  # 通
                 temp = res.split("=")
                 delay = temp[len(temp) - 1]
@@ -549,7 +509,7 @@ def singleSpeedTest(port, process, e: Node, index):
         e.index = index
         if useExclude and exclude.search(e.location) is not None:
             zeroSpeedList.append(e)
-            log("port " + str(port) + " : discard node " + str(index) + ": in the exclusion list (" + e.location + ")")
+            log(" discard node " + str(index) + ": in the exclusion list (" + e.location + ")")
         else:
             if speed >= minSpeed:
                 unavailableCount = 0
@@ -588,9 +548,10 @@ def saveNode(nodes):
 
 
 def readNodes():
+    log("retrieving nodes from cache ... ")
     with open(confdir + "save.bin", "rb") as file:
         content = pickle.load(file)
-        log("cache node: " + str(len(content)))
+        log("cached nodes: " + str(len(content)))
     return content
 
 
@@ -637,6 +598,7 @@ def getTimeGap():
 
 def clearTestConfig():
     list = os.listdir(confdir)
+    list2 = os.listdir("guiLogs/")
     for i in list:
         if i.endswith("json"):
             try:
@@ -644,7 +606,11 @@ def clearTestConfig():
                 os.remove(confdir + i)
             except Exception:
                 pass
+    for j in list2:
+        os.remove("guiLogs/" + j)
 
+
+clearTestConfig()
 
 label = None
 box = None
@@ -665,7 +631,7 @@ def gui():
     box = tkinter.Listbox(font=("Helvetica", 12))
     top.add(box)
 
-    keeponBtn = tkinter.Button(root, width=12, text="继续",
+    keeponBtn = tkinter.Button(root, width=10, text="继续",
                                command=lambda: continueTest())
     chooseBtn = tkinter.Button(root, width=10, text="确定",
                                command=lambda: chooseNode())
@@ -795,7 +761,7 @@ def guiMode(nodes):
         time.sleep(0.5)
         failCount += 1
         if failCount > 480:
-            log("there may something wrong with gui mode, try set minSpeed = -1 please")
+            log("error: speed testing failed, check settings")
             break
     gui()
 
@@ -812,8 +778,9 @@ def retrieveFromRemote():
         sftp = paramiko.SFTPClient.from_transport(sf)
         sftp.get("list.txt", os.path.join("list.txt"))  # 下载目录中文件
     except Exception as e:
-        log("get from remote: failed")
-        print(e)
+        log("error: remote failed, check settings")
+        exit()
+        # print(e)
     finally:
         sf.close()
     with open("list.txt", "r", encoding="utf-8") as file:
@@ -838,15 +805,15 @@ def retrieveFromRemote():
     return rawNodes
 
 
-def retrieveFromUrl(url):
+def retrieveFromUrl(param):
     global rawNodes
     available = False
     for i in range(0, 2):  # 两次机会
         try:
-            if url[1]:
-                r = os.popen(curlPath + " -x http://localhost:" + str(pxport) + " " + url[0] + " -skL -m 10").read()
-            else:
-                r = os.popen(curlPath + " " + url[0] + " -skL -m 10").read()
+            if param[1]:  # 代理就绪，使用代理获取结点
+                r = os.popen(curlPath + " -x http://localhost:" + str(pxport) + " " + param[0] + " -skL -m 10").read()
+            else:  # 代理不就绪，直接获取结点
+                r = os.popen(curlPath + " " + param[0] + " -skL -m 10").read()
             if len(r) < 100:
                 raise RuntimeError
             available = True
@@ -857,7 +824,7 @@ def retrieveFromUrl(url):
         try:
             vmess = b64decode(r).decode().split("\n")  # vmess链接
         except Exception:
-            log(url[0] + ": decode error")
+            log(param[0] + ": decode error")
             return
         lock.acquire()
         for temp in vmess:
@@ -867,18 +834,18 @@ def retrieveFromUrl(url):
                 rawNodes.append(content)
             except Exception as e:
                 pass
-        log(url[0] + ": " + str(len(vmess)) + ", total: " + str(len(rawNodes)))
+        log(param[0] + ": " + str(len(vmess)) + ", total: " + str(len(rawNodes)))
         # log("after " + url[0] + ": " + str(len(rawNodes)))
         lock.release()
     else:
-        log(url[0] + ": unavailable")
+        log(param[0] + ": unavailable")
 
 
 def retrieveNodes():
-    log("retrieving nodes from url ... ")
+    log("retrieving nodes from pools ... ")
     conn = detectConn(check=True)
     if conn:
-        log("detect proxy, use proxy")
+        log("proxy ready, use proxy")
     else:
         log("proxy not ready, use direct")
     global vmess, rawNodes
@@ -922,7 +889,7 @@ def stateChecker(info):
 
 
 if __name__ == '__main__':
-    print(version)
+    print(version + "\n")
     # mode = input("select mode: 1---Manual, 2---Auto, 3---Fast Auto. recommend: 2/3\n")
     mode = "3"
     if mode == "3":
@@ -930,10 +897,10 @@ if __name__ == '__main__':
         maxProcess = int(maxProcess * 1.5)
     # killV2ray()
     if getTimeGap() < cacheTime and useCache:
-        log("using cache")
+        log("cache enable")
         nodes = readNodes()
     else:
-        log("passing cache")
+        log("cache disable")
         # pingNodes(getconfigsFromURL())
         if useRemote:
             pingNodes(retrieveFromRemote())
