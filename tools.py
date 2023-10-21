@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import warnings
 
-# new file
+# update 2023-10-21
 warnings.filterwarnings("ignore")
 import subprocess
 from collections import OrderedDict
@@ -15,10 +15,11 @@ import json
 import tkinter
 import re
 
+date = "20231021"
 hiddenURL = "https://f.kxyz.eu.org/f.php?r=aHR0cHM6Ly9iLmx1eHVyeS9saW5rL25EcWdlQlh4NUl5SjJ2RnQ/c3ViPTM="
 version = "AutoConfig v2.2"
 # 结点设置
-minNodes = 200  # 从结点池中获取的结点数小于N就累加到大于N为止
+minNodes = 300  # 从结点池中获取的结点数小于N就累加到大于N为止
 acceptNodes = 400  # ping的结点个数
 useRandom = True  # 结点池的访问次序是否随机
 minDelay = 0  # 丢弃时延小于N ms的结点，避免遇到国内中转
@@ -27,7 +28,7 @@ useCache = False  # 开启后，节点会保存cacheTime秒供下次使用
 cacheTime = 3600
 useExclude = False  # 开启后会排除下列地区的结点
 exclude = re.compile('HK|TW|US')
-autoLoginFlag = True  # 校园网自动登录
+autoLoginFlag = False  # 校园网自动登录
 updateFlag = True  # 自动更新
 
 # 测速设置
@@ -36,7 +37,7 @@ minSpeed = 50  # 小于N K/s的不要，=-1表示不进行速度筛选，能访�
 testResource = r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"'  # 一个谷歌云盘文件，文件可以换
 
 basePort = 20000  # 多线程测速起始端口
-maxProcess = 20  # 同时运行的测速线程数
+maxProcess = 64  # 同时运行的测速线程数
 limitNodes = 10  # 测到N个可用结点后结束测速
 
 debug = False  # 检查各代理线程工作状态用
@@ -46,7 +47,7 @@ daemonTime = 600
 useRemote = False  # 从远程获取结点，加快获取结点的速度
 remoteSocket = ("192.168.123.1", 22)
 
-pxport = 23334  # 代理端口，需要等于v2rayN的socks端口+1，等于v2rayN的http端口
+pxport = 23334  # 代理端口，需要等于v2rayN软件中的socks端口+1，等于v2rayN的http端口
 
 try:
     import paramiko
@@ -82,6 +83,7 @@ vmess = [  # 屏蔽结点池，需要代理才可访问，仅接受b64
     "https://raw.githubusercontent.com/vveg26/get_proxy/main/dist/v2ray.config.txt"
 ]
 
+performance = {}
 for i in Avmess:
     vmess.insert(0, i)
 
@@ -114,24 +116,26 @@ class Node:
 avalist = []
 
 
-def testSpeed(i, port=pxport, maxTime=maxTime):
+def testSpeed(i, port=pxport, node=None, maxTime=maxTime):
+    global performance
     try:
         driver = os.popen(
             'curl -x http://localhost:' + str(port) + ' -m ' + str(
                 maxTime) + ' -skL -o c:/windows/nul ' + testResource + ' --limit-rate 1000k -w "%{speed_download}"')
         res = int(float(driver.read()) / 1024)
-        log("[" + str(i) + "/" + str(len(avalist)) + "]" + " : " + str(res) + "KB/s")
-        if res == 0:
-            count = 0
-            for i in range(0, 4):
-                accessTime = os.popen('curl -x http://localhost:' + str(
-                    port) + ' -o /dev/null -skL www.google.com -m 3 -w "%{time_total}"').read()
-                time.sleep(0.1)
-                daccessTime = float(accessTime[:-4])
-                if daccessTime < 2.0:
-                    count += 1
-            if count >= 2:
-                res = 100
+        log("[" + str(i) + "/" + str(len(avalist)) + "]" + " : " + str(res) + "KB/s" + ": from " + node.config["from"][8:])
+
+        # if res == 0:
+        #     count = 0
+        #     for i in range(0, 4):
+        #         accessTime = os.popen('curl -x http://localhost:' + str(
+        #             port) + ' -o /dev/null -skL www.google.com -m 3 -w "%{time_total}"').read()
+        #         time.sleep(0.1)
+        #         daccessTime = float(accessTime[:-4])
+        #         if daccessTime < 2.0:
+        #             count += 1
+        #     if count >= 2:
+        #         res = 100
     except Exception as e:
         return -1
     return res
@@ -437,13 +441,24 @@ def mulitTest(nodes):
         log("wait running process done, now: " + str(running))
         time.sleep(5)
     log("done, " + str(i) + " tested: " + str(len(speedList)) + " available, " + str(
-        i - len(speedList)) + " unavailable")
+        i - len(speedList)) + " unavailable, details: ")
+    headers = ('Source', 'Obtained', 'Tested', 'Available', 'Success')
+    print('{:^30} {:^20} {:^10} {:^10} {:^10}'.format(*headers))
+
+    for key in performance.keys():
+        target = performance[key]
+        if target["tested"] != 0:
+            print('{:<30} {:^20} {:^10} {:^10} {:^10.2%}'.format(key[8:38], target["obtain"], target["tested"],
+                                                                 target["avail"], target["avail"] / target["tested"]))
+        else:
+            print('{:<30} {:^20} {:^10} {:^10} {:^10}'.format(key[8:38], target["obtain"], "----",
+                                                              "----", "----"))
     traffic = 0
     for e in speedList:
         traffic += e.speed * 0.8 * maxTime / 1024
     for e in zeroSpeedList:
         traffic += e.speed * 0.8 * maxTime / 1024
-
+    print("\n")
     log("consume traffic: " + ("%.2f" % traffic) + "MB")
     saveNode(speedList + zeroSpeedList + avalist)
 
@@ -489,7 +504,9 @@ unavailableCount = 0
 
 
 def singleSpeedTest(port, process, e: Node, index):
-    global speedList, running, box, zeroSpeedList, attention, unavailableCount
+    global speedList, running, box, zeroSpeedList, attention, unavailableCount, performance
+    # print(performance)
+    performance[e.config["from"]]["tested"] += 1
     if not detectConn(port):
         log("[" + str(index) + "/" + str(len(avalist)) + "] : ×")
         unavailableCount += 1
@@ -504,7 +521,7 @@ def singleSpeedTest(port, process, e: Node, index):
             else:
                 e.delay = 100
         unavailableCount = 0
-        speed = testSpeed(index, port)
+        speed = testSpeed(index, port, e)
         e.speed = speed
         e.location = getCountry(port)
         e.index = index
@@ -520,6 +537,10 @@ def singleSpeedTest(port, process, e: Node, index):
                 while box is None:
                     time.sleep(1)
                 box.insert('end', info)
+                # print(performance)
+
+                performance[e.config["from"]]["avail"] += 1
+                # print(performance)
                 lock.release()
             else:
                 unavailableCount += 1
@@ -729,10 +750,10 @@ def update_tools():
         if res.find("version") != -1:
             with open("tools.py", "w", encoding='utf-8') as file:
                 file.write(res)
-            log("self update success: tools.py")
+            log("update success: tools.py")
             return
         else:
-            log("self update failed: tools.py")
+            log("update failed: tools.py")
 
 
 def cmdMode(nodes: list):
@@ -807,7 +828,7 @@ def retrieveFromRemote():
 
 
 def retrieveFromUrl(param):
-    global rawNodes
+    global rawNodes, performance
     available = False
     for i in range(0, 2):  # 两次机会
         try:
@@ -832,10 +853,16 @@ def retrieveFromUrl(param):
             try:
                 b64content = temp[8:]  # 分离地址端口
                 content = b64decode(b64content).decode()  # 明文地址端口
+                # print(content)
+                # log(type(content))
+                # print("----")
+                content = content[:-1]  # 去右括号
+                content += ',"from":"' + param[0] + '"}'
                 rawNodes.append(content)
             except Exception as e:
                 pass
         log(param[0] + ": " + str(len(vmess)) + ", total: " + str(len(rawNodes)))
+        performance[param[0]] = {"tested": 0, "avail": 0, "obtain": len(vmess)}
         # log("after " + url[0] + ": " + str(len(rawNodes)))
         lock.release()
     else:
@@ -846,9 +873,9 @@ def retrieveNodes():
     log("retrieving nodes from pools ... ")
     conn = detectConn(check=True)
     if conn:
-        log("proxy ready, use proxy")
+        log("proxy ready, connect by proxy")
     else:
-        log("proxy not ready, use direct")
+        log("proxy not ready, connect directly")
     global vmess, rawNodes
     executes = ThreadPoolExecutor(max_workers=4)
     running = []
@@ -873,7 +900,7 @@ def retrieveNodes():
     for i in running:
         i.cancel()
     if len(rawNodes) < 10:
-        log("error: cannot retrieve nodes, need update pools")
+        log("error: cannot retrieve nodes, update pools please")
         exit(-1)
     log("total nodes: " + str(len(rawNodes)))
     # exit(-1)
@@ -890,18 +917,18 @@ def stateChecker(info):
 
 
 if __name__ == '__main__':
-    print(version + "\n")
+    print(version + ", update " + date + "\n")
     # mode = input("select mode: 1---Manual, 2---Auto, 3---Fast Auto. recommend: 2/3\n")
     mode = "3"
     if mode == "3":
         passPing = True
-        maxProcess = int(maxProcess * 1.5)
+        # maxProcess = int(maxProcess * 1.5)
     # killV2ray()
     if getTimeGap() < cacheTime and useCache:
         log("cache enable")
         avalist = readNodes()
     else:
-        log("cache disable")
+        log("cache disabled")
         # pingNodes(getconfigsFromURL())
         if useRemote:
             pingNodes(retrieveFromRemote())
@@ -910,7 +937,7 @@ if __name__ == '__main__':
         log("Pingable nodes: " + str(len(avalist)))
         customizeNode(avalist)
         saveNode(avalist)
-        log(str(len(avalist))+" nodes cached for " + str(cacheTime) + "s")
+        log(str(len(avalist)) + " nodes cached for " + str(cacheTime) + "s")
     if mode == "3":
         log("Activate mode: Fast Auto")
         guiMode(avalist)
