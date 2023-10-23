@@ -20,7 +20,7 @@ hiddenURL = "https://f.kxyz.eu.org/f.php?r=aHR0cHM6Ly9iLmx1eHVyeS9saW5rL25EcWdlQ
 version = "AutoConfig v2.2"
 # 结点设置
 minNodes = 300  # 从结点池中获取的结点数小于N就累加到大于N为止
-acceptNodes = 400  # ping的结点个数
+acceptNodes = 800  # ping的结点个数
 useRandom = True  # 结点池的访问次序是否随机
 minDelay = 0  # 丢弃时延小于N ms的结点，避免遇到国内中转
 passPing = False  # 跳过ping，以加快速度
@@ -56,30 +56,28 @@ except:
 
 # 结点池获取 https://github.com/WilliamStar007/ClashX-V2Ray-TopFreeProxy/blob/main/v2ray.md
 Avmess = [  # 普通结点池，可直接访问，仅接受b64
+    "https://raw.githubusercontent.com/adiwzx/freenode/main/adispeed.txt",
+    "https://nodefree.org/dy/2023/10/20231022.txt",
+    "https://raw.githubusercontent.com/pojiezhiyuanjun/2023/master/1022.txt",
+    "https://clashnode.com/wp-content/uploads/2023/10/20231023.txt"
     "https://gitlab.com/mfuu/v2ray/-/raw/master/v2ray",
     "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
     "https://raw.fastgit.org/ZywChannel/free/main/sub",
     "https://v2ray.neocities.org/v2ray.txt",
-    # "https://nodefree.org/dy/2023/08/20230825.txt",
-    # "https://clashnode.com/wp-content/uploads/2023/08/20230825.txt",
     "https://raw.fastgit.org/Pawdroid/Free-servers/main/sub",
-    "https://freefq.neocities.org/free.txt",
     "https://youlianboshi.netlify.com",
     "https://free.jingfu.cf/vmess/sub",
     "https://tt.vg/freev2",
     "https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray",
     "https://raw.githubusercontent.com/learnhard-cn/free_proxy_ss/main/free",
-    # "https://raw.githubusercontent.com/pojiezhiyuanjun/2023/master/0826.txt",
     "https://raw.fastgit.org/freefq/free/master/v2",
     "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
 ]
 
 vmess = [  # 屏蔽结点池，需要代理才可访问，仅接受b64
-    "https://raw.githubusercontent.com/openrunner/clash-freenode/main/v2ray.txt",
     "https://jiang.netlify.app/",
     "https://sub.pmsub.me/base64",
     "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
-    "https://raw.githubusercontent.com/xieshunxi1/subscribe_clash_v2ray/main/subscribe/v2ray.txt",
     "https://raw.githubusercontent.com/vveg26/get_proxy/main/dist/v2ray.config.txt"
 ]
 
@@ -123,7 +121,8 @@ def testSpeed(i, port=pxport, node=None, maxTime=maxTime):
             'curl -x http://localhost:' + str(port) + ' -m ' + str(
                 maxTime) + ' -skL -o c:/windows/nul ' + testResource + ' --limit-rate 1000k -w "%{speed_download}"')
         res = int(float(driver.read()) / 1024)
-        log("[" + str(i) + "/" + str(len(avalist)) + "]" + " : " + str(res) + "KB/s" + ": from " + node.config["from"][8:])
+        log("[" + str(i) + "/" + str(len(avalist)) + "]" + " : " + str(res) + "KB/s" + ": from " + node.config["from"][
+                                                                                                   8:])
 
         # if res == 0:
         #     count = 0
@@ -441,7 +440,7 @@ def mulitTest(nodes):
         log("wait running process done, now: " + str(running))
         time.sleep(5)
     log("done, " + str(i) + " tested: " + str(len(speedList)) + " available, " + str(
-        i - len(speedList)) + " unavailable, details: ")
+        i - len(speedList)) + " unavailable, statistics: ")
     headers = ('Source', 'Obtained', 'Tested', 'Available', 'Success')
     print('{:^30} {:^20} {:^10} {:^10} {:^10}'.format(*headers))
 
@@ -459,7 +458,7 @@ def mulitTest(nodes):
     for e in zeroSpeedList:
         traffic += e.speed * 0.8 * maxTime / 1024
     print("\n")
-    log("consume traffic: " + ("%.2f" % traffic) + "MB")
+    log(" traffic consumption: " + ("%.2f" % traffic) + "MB")
     saveNode(speedList + zeroSpeedList + avalist)
 
     clearTestConfig()
