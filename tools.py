@@ -204,9 +204,9 @@ class Data():
             try:
                 self.doGenerate(node, self.testPort)
             except Exception as e:
-                log("cannot generate config on")
+                log("warning: cannot generate config on")
                 log(json.dumps(node))
-                log(e)
+                log(str(e))
                 continue
             count[0] += 1
             if fbk_start != self.fallback:  # 激活了emg，需要关闭非emg
