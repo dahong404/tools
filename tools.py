@@ -12,47 +12,50 @@ from base64 import b64decode
 from concurrent.futures import ThreadPoolExecutor
 from urllib import parse
 
-pools = [  # 结点池，支持b64编码的Trojan、Vmess，Vless和ss协议
+'''
+放在V2rayN.exe同级目录，最高支持V2rayN版本3.29
+结点来源 https://raw.githubusercontent.com/WilliamStar007/
+测速源 https://drive.google.com
+'''
+
+staticPool = [  # 静态结点池，支持b64编码的Trojan、Vmess，Vless和ss协议
     "https://raw.githubusercontent.com/adiwzx/freenode/main/adispeed.txt",
-    "https://nodefree.org/dy/2023/10/20231022.txt",
-    # "https://raw.githubusercontent.com/pojiezhiyuanjun/2023/master/1022.txt",
-    "https://clashnode.com/wp-content/uploads/2023/10/20231023.txt",
     "https://gitlab.com/mfuu/v2ray/-/raw/master/v2ray",
-    "https://raw.fastgit.org/ZywChannel/free/main/sub",
+    # "https://raw.fastgit.org/ZywChannel/free/main/sub",  #
     "https://v2ray.neocities.org/v2ray.txt",
-    "https://raw.fastgit.org/Pawdroid/Free-servers/main/sub",
+    # "https://raw.fastgit.org/Pawdroid/Free-servers/main/sub",  #
     "https://youlianboshi.netlify.com",
-    "https://free.jingfu.cf/vmess/sub",
+    # "https://free.jingfu.cf/vmess/sub",  #
     "https://jiang.netlify.app/",
     "https://sub.pmsub.me/base64",
-    "https://nodefree.org/dy/2023/11/20231121.txt",
-    "https://clashnode.com/wp-content/uploads/2023/11/20231122.txt",
     "https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray",
-    "https://raw.fastgit.org/freefq/free/master/v2",
-    # "https://raw.githubusercontent.com/pojiezhiyuanjun/2023/master/1121.txt",
+    # "https://raw.fastgit.org/freefq/free/master/v2",  #
     "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt",
     "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
     "https://raw.githubusercontent.com/learnhard-cn/free_proxy_ss/main/free",
-    # "https://raw.githubusercontent.com/tbbatbb/Proxy/master/dist/v2ray.config.txt",
-    # "https://raw.githubusercontent.com/vveg26/get_proxy/main/dist/v2ray.config.txt",
-    # "https://raw.githubusercontent.com/openrunner/clash-freenode/main/v2ray.txt",
     "https://tt.vg/freev2",
-    # "https://kxswa.tk/v2ray"
 ]
 
-testResource = [r'"http://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"',
-                r'"http://drive.google.com/uc?export=download&id=1rGfa8eK_3wb4uuQHT1uvitXOHxD4uh51"',
-                r'"http://drive.google.com/uc?export=download&id=1TQEDtoAOU75aPKi4-f4ZmUI1eW8qbH_9"',
-                r'"http://drive.google.com/uc?export=download&id=12asg8djJtWQireWma1nRuSnJI969tNNP"',
-                r'"http://drive.google.com/uc?export=download&id=1dAyib4HtOTfyy_WARIxLthQQYOiKENX2"',
-                r'"http://drive.google.com/uc?export=download&id=170CpxgVRk8yrb6FjFmnTJDHP-qWgeHZz"'
+testResource = [r'"https://drive.google.com/uc?export=download&id=1SasaZhywEOXpVl61a7lqSXppCTSmj3pU"',
+                r'"https://drive.google.com/uc?export=download&id=1rGfa8eK_3wb4uuQHT1uvitXOHxD4uh51"',
+                r'"https://drive.google.com/uc?export=download&id=1TQEDtoAOU75aPKi4-f4ZmUI1eW8qbH_9"',
+                r'"https://drive.google.com/uc?export=download&id=12asg8djJtWQireWma1nRuSnJI969tNNP"',
+                r'"https://drive.google.com/uc?export=download&id=1dAyib4HtOTfyy_WARIxLthQQYOiKENX2"',
+                r'"https://drive.google.com/uc?export=download&id=170CpxgVRk8yrb6FjFmnTJDHP-qWgeHZz"'
                 ]  # 测速用，谷歌云盘文件]
 
-# 核心参数，影响能不能用，最大支持V2rayN版本3.29
+# 核心参数，影响能不能用
 configDir = "v2ray_win_temp/"  # 自定义配置文件所在文件夹
 NGConfigName = "36ad1899-d3d4-49f1-9dd2-7e2052059f81.json"  # 指向自定义配置文件
 NGSocksPort = 23333  # 本地监听Socks端口
 NGHttpPort = NGSocksPort + 1  # 本地监听HTTP端口
+
+if not os.path.exists(configDir + NGConfigName):
+    if not os.path.exists(configDir):
+        os.mkdir(configDir)
+    with open(configDir + NGConfigName, "w+") as file:
+        file.write("")
+        file.close()
 
 # 影响体验
 testSpeed = True  # 若设为否，则不使用谷歌盘测速，仅测试是否能访问谷歌
@@ -69,8 +72,9 @@ debug = False
 useExclude = False  # 开启后会排除下列地区的结点
 exclude = re.compile('HK|TW|US')
 update = True  # 自动升级
-version = "Auto config v3.0, 2023-11-27 "
-pools = list(set(pools))  # 去重复
+version = "Auto config v3.1"
+updateTime = "2024-03-03"
+staticPool = list(set(staticPool))  # 去重复
 lock = threading.Lock()
 
 
@@ -84,6 +88,7 @@ class Data():
         self.fallback = False
         self.spdNodes = []
         self.testPort = testPort
+        self.usePool = None  # 动态结点池
 
     def decode_base64(self, data):
         missing_padding = 4 - len(data) % 4
@@ -120,7 +125,7 @@ class Data():
                 log("warning: port " + str(port) + " open failed")
                 vrayid.kill()
                 return 0
-        if self.fallback:
+        if self.fallback:  # 降级模式下，只要能访问就能通过速度测试
             state = False
             for i in range(0, 2):
                 google = os.popen(
@@ -137,10 +142,10 @@ class Data():
                 log("fallback: port " + str(port) + " √")
                 node["speed"] = minSpeed + 1
             else:
+                node["speed"] = -1
                 if port % 5 == 0:
                     log("fallback: port " + str(port) + " ×")
-                    node["speed"] = -1
-        else:
+        else:  # 正常模式下，测速大于标速才能通过速度测试
             targetSrc = testResource[random.randint(0, len(testResource) - 1)]
             driver = subprocess.Popen(
                 'curl -x http://localhost:' + str(port) + ' -m ' + str(
@@ -151,7 +156,7 @@ class Data():
             node["speed"] = res
             if res == 0:
                 if port % 10 == 0:
-                    log("normal: port " + str(port) + " " + str(res) + "KB/s")
+                    log("normal: port " + str(port) + " " + "x")
             else:
                 log("normal: port " + str(port) + " " + str(res) + "KB/s")
         if node["speed"] > minSpeed:
@@ -166,18 +171,27 @@ class Data():
                     return
             except Exception as e:
                 node["region"] = "-1"
-            ping = os.popen("tcping -n 1 -w 1 -p " + node["port"] + " " + node["add"]).read()
-            if ping.find("Average") != -1:  # 通
+            ping = os.popen("ping " + node["add"] + " -w 1500 -n 1").read()
+            if ping.find("平均") == -1:
+                node["delay"] = -1
+            else:
                 try:
-                    temp = ping.split("=")
-                    delay = temp[len(temp) - 1]
-                    ddelay = int(delay[:-7])  # str->float
-                    node["delay"] = ddelay
+                    node["delay"] = int(ping.split("平均 =")[-1].strip().replace("ms", ""))
                 except:
                     node["delay"] = -1
                     pass
-            else:
-                node["delay"] = -1
+
+            # ping = os.popen("tcping -n 1 -w 1 -p " + node["port"] + " " + node["add"]).read()
+            # if ping.find("Average") != -1:  # 通
+            #     try:
+            #         temp = ping.split("=")
+            #         delay = temp[len(temp) - 1]
+            #         ddelay = int(delay[:-7])  # str->float
+            #         node["delay"] = ddelay
+            #     except:
+            #         node["delay"] = -1
+            #         pass
+            # else:
             node["inbound"] = port
             node["state"] = "-"
             self.spdNodes.append(node)
@@ -231,7 +245,7 @@ class Data():
             if ok:
                 break
             time.sleep(2)
-        for i in unTestedNode:  # normal结束过程中，fallback已经拿走部分unTest并加上了speed，此处防止normal改回-1
+        for i in unTestedNode:  # normal结束过程中，fallback已经拿走部分unTest并加上了属性，此处防止normal改回-1
             try:
                 i["speed"]
             except KeyError:
@@ -421,14 +435,45 @@ class Data():
         with open(configDir + str(port) + ".json", "w+") as file:
             file.write(json.dumps(baseConfig))
 
-    def retrieveFromPools(self, conn):
+    def updatePool(self, conn):
+        if not conn:
+            log("updating pool directly ...  ")
+            content = subprocess.Popen(
+                "curl -skL -m 8 https://raw.githubusercontent.com/WilliamStar007/"
+                "ClashX-V2Ray-TopFreeProxy/main/v2ray.md", encoding="utf-8", stdout=subprocess.PIPE).stdout.read()
+        else:
+            log("updating pool by proxy ...  ")
+            content = subprocess.Popen(
+                "curl -x http://localhost:" + str(
+                    NGHttpPort) + " -skL -m 8 https://raw.githubusercontent.com/WilliamStar007/"
+                                  "ClashX-V2Ray-TopFreeProxy/main/v2ray.md", encoding="utf-8",
+                stdout=subprocess.PIPE).stdout.read()
+        if content.find("## Subscription Links") == -1:
+            log("warning: no pool found, use static pool")
+            self.usePool = staticPool
+        else:
+            content = content[content.index("## Subscription Links"):content.index("**Free Node Pool**")].split("\n")
+            dynamicPool = []
+            for link in content:
+                if link.find("https") != -1:
+                    link = link.split(": https://")[1]
+                    if link.endswith("★"):
+                        dynamicPool.append("https://" + link[:-1].strip())
+                    else:
+                        dynamicPool.append("https://" + link)
+            self.usePool = list(set(dynamicPool + staticPool))
+            log("success: static " + str(len(staticPool)) + " dynamic " + str(
+                len(dynamicPool)) + " available " + str(len(
+                self.usePool)))
+
+    def retrieveFromPool(self, conn):
         executes = ThreadPoolExecutor(max_workers=8)
         retrievers, nodes = [], []
         if conn:
-            log("proxy ready, connect by proxy")
+            log("access pool by proxy ...")
         else:
-            log("proxy not ready, connect directly")
-        for pool in pools:
+            log("access pool directly ...")
+        for pool in self.usePool:
             retrievers.append(executes.submit(self.doRetrieve, (pool, conn, NGHttpPort, nodes)))
         while True:
             ok = True
@@ -463,11 +508,13 @@ class Data():
             if len(r) < 100:
                 if r == "":
                     r = "return nothing"
-                log("warning: " + src.replace("https://", "") + " " + r)
                 continue
             available = True
             break
-        if available:
+        if not available:
+            log("warning: " + src.replace("https://", "") + " " + r)
+            return
+        else:
             try:
                 count = 0
                 content = self.decode_base64(r)
@@ -586,7 +633,12 @@ class Gui():
         self.clean = True
         if not debug:
             conn = self.detectConn(NGHttpPort, True)
-            self.data.retrieveFromPools(conn)
+            try:
+                self.data.updatePool(conn)
+            except:
+                log("error in updating pool, use static pool")
+                self.data.usePool = staticPool
+            self.data.retrieveFromPool(conn)
             if not testSpeed:
                 self.doFallback()
             else:
@@ -629,7 +681,7 @@ class Gui():
         self.box.pack(fill=tk.BOTH, expand=True, padx=5, pady=5, ipadx=5, ipady=5)
         self.box.insert(0, "Hello")
         btnFrame = tk.Frame(root)
-        self.btnOK = tk.Button(btnFrame, text="确定", width=9, height=2, command=lambda: self.btnOk())
+        self.btnOK = tk.Button(btnFrame, text="确定", width=9, height=2, command=lambda: self.clickBtnOk())
         self.btnOK.pack(side="right", padx=10)
 
         self.btnRetest = tk.Button(btnFrame, text="重测", width=9, height=2, command=lambda: self.reTest())
@@ -648,7 +700,7 @@ class Gui():
         tk.mainloop()
 
     def doFallback(self):
-        log("trigger fallback")
+        log("fallback activated")
         self.data.fallback = True  # 通知normal，fallback已启动
         self.fallBackTime = fallBackTimeout
         gc = threading.Thread(target=self.data.generateConfig)
@@ -704,7 +756,10 @@ class Gui():
         info = node["region"] + ", " + str(node["speed"]) + "K/s, " + str(node["delay"]) + "ms"
         if self.detectConn(NGHttpPort):
             self.changeState("ok", info)
-            self.data.spdNodes[current_select]["state"] = "o"
+            for i in self.data.spdNodes:
+                if i["state"] == "->":
+                    i["state"] = "o"
+            self.data.spdNodes[current_select]["state"] = "->"
             log("OK: " + info)
             if self.clean:
                 if not debug:
@@ -716,22 +771,31 @@ class Gui():
                 gc.start()
         else:
             self.changeState("fail", info)
+            for i in self.data.spdNodes:
+                if i["state"] == "->":
+                    i["state"] = "o"
             self.data.spdNodes[current_select]["state"] = "x"
             self.data.spdNodes[current_select]["speed"] = -1
             log("FAILED: " + info)
         self.var.set(self.prepareBoxMsg(sorted(self.data.spdNodes, reverse=True, key=lambda x: x["speed"])))
         lock.release()
+        self.changeBtn(self.btnRetest, "enable")
+        self.changeBtn(self.btnOK, "enable")
 
-    def btnOk(self):
+    def clickBtnOk(self):
         if len(self.box.curselection()) == 0:
             return
+        self.changeBtn(self.btnRetest, "disable")
+        self.changeBtn(self.btnOK, "disable")
         val = self.box.get(self.box.curselection())
-        val = re.sub(r"\s+", "*", val).split("*")
-        selectState, selectRegin, selectSpeed, selectDelay = val[1], val[2], int(val[3]), int(val[4])
+        val = re.sub(r"\s+", "*", val).split("*")  # 把不等长的空白替换成*，利用*作为分割符
+        selectState, selectRegin, selectSpeed, selectDelay, selectFrom = val[1], val[2], int(val[3]), int(val[4]), val[
+            6]
         current_select = None
         for i in range(0, len(self.data.spdNodes)):
             node = self.data.spdNodes[i]
-            if node["region"] == selectRegin and node["speed"] == selectSpeed and node["delay"] == selectDelay:
+            if node["region"] == selectRegin and node["speed"] == selectSpeed and node["delay"] == selectDelay and node[
+                "from"].replace("https://", "") == selectFrom:
                 current_select = i
                 break
         gc = threading.Thread(target=self.configNG, args=(current_select,))
@@ -858,5 +922,5 @@ class Gui():
 
 
 if __name__ == '__main__':
-    log(version)
+    log(version + " " + updateTime)
     Gui()
