@@ -922,5 +922,6 @@ class Gui():
 
 
 if __name__ == '__main__':
-    log(version + " " + updateTime)
+    log(version +" https://github.com/dahong404/tools")
+    exit()
     Gui()
