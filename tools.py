@@ -896,7 +896,7 @@ class Gui():
     def detectConn(self, port, forPoolAccess=False):
         failCount = 0
         if not forPoolAccess:
-            opp = 2
+            opp = 1
             timeout = str(5)
             while not self.data.isPortOpen(port):  # 等待v2ray启动
                 log("connecting v2rayN ...")
@@ -913,14 +913,14 @@ class Gui():
                 "curl -x http://localhost:" + str(port) + " -skLI www.google.com  -m " + timeout).read(150)
             if str(google).find("ISO-8859-1") != -1:
                 return True
-            if not forPoolAccess:
-                twitter = os.popen(
-                    "curl -x http://localhost:" + str(port) + " -skI www.twitter.com  -m " + timeout).read(50)
-                if str(twitter).find("301 Moved Permanently") != -1:
-                    return True
+            # if not forPoolAccess:
+            #     twitter = os.popen(
+            #         "curl -x http://localhost:" + str(port) + " -skI www.twitter.com  -m " + timeout).read(50)
+            #     if str(twitter).find("301 Moved Permanently") != -1:
+            #         return True
         return False
 
 
 if __name__ == '__main__':
-    log(version +" https://github.com/dahong404/tools")
+    log(version + " " + updateTime)
     Gui()
